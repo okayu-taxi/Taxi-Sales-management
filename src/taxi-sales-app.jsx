@@ -136,7 +136,17 @@ export default function TaxiSalesApp() {
   const updPeriod = useCallback((np) => setData(p => ({ ...p, periods: { ...p.periods, [pKey]: np } })), [pKey]);
   const saveDay = useCallback(() => { const a = parseInt(inputAmount.replace(/,/g, "")); if (!a || isNaN(a)) return; updPeriod({ ...pData, days: { ...pData.days, [inputDateKey]: a } }); setInputAmount(""); }, [inputAmount, inputDateKey, pData, updPeriod]);
   const saveGoal = useCallback(() => { const g = parseInt(goalInput.replace(/,/g, "")); if (!g || isNaN(g)) return; updPeriod({ ...pData, goal: g }); setGoalInput(""); setEditingGoal(false); }, [goalInput, pData, updPeriod]);
-  const autoSetGoal61 = useCallback(() => { if (target61) updPeriod({ ...pData, goal: Math.round(target61 * 1.1) }); }, [target61, pData, updPeriod]);
+  const autoSetGoal61 = useCallback(() => {
+    if (!target61) return;
+    const newGoal = Math.round(target61 * 1.1);
+    setData(p => ({
+      ...p,
+      periods: {
+        ...p.periods,
+        [pKey]: { ...(p.periods?.[pKey] || { days: {} }), goal: newGoal }
+      }
+    }));
+  }, [target61, pKey]);
   const deleteDay = useCallback((key) => { const nd = { ...pData.days }; delete nd[key]; updPeriod({ ...pData, days: nd }); }, [pData, updPeriod]);
   const saveClosing = useCallback(() => { const v = parseInt(closingInput); if (isNaN(v) || v < 0 || v > 28) return; setData(p => ({ ...p, settings: { ...p.settings, closingDay: v } })); setClosingInput(""); setEditingClosing(false); }, [closingInput]);
 
