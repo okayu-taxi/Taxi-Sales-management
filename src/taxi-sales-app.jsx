@@ -383,7 +383,7 @@ export default function TaxiSalesApp() {
           <div style={{ ...card, padding: "12px 16px", marginBottom: 12 }}>
             <p style={{ margin: 0, fontSize: 12, color: "#aaa", lineHeight: 1.8 }}>
               タップするたびに切り替わります：<br />
-              <span style={{ color: "#111", fontWeight: 700 }}>出勤</span>　→　<span style={{ color: "#c8900a", fontWeight: 700 }}>有給</span>　→　<span style={{ color: "#e55", fontWeight: 700 }}>欠勤</span>　→　なし
+              <span style={{ color: "#111", fontWeight: 700 }}>出勤</span>　→　<span style={{ color: "#4a90d9", fontWeight: 700 }}>有給</span>　→　<span style={{ color: "#e55", fontWeight: 700 }}>欠勤</span>　→　なし
             </p>
           </div>
           {(periodAtt.work > 0 || periodAtt.paid > 0 || periodAtt.absent > 0) && (
@@ -391,7 +391,7 @@ export default function TaxiSalesApp() {
               <div style={{ fontSize: 11, color: "#bbb", marginBottom: 8, fontWeight: 700, letterSpacing: 1 }}>今期の出勤状況</div>
               <div style={{ display: "flex", gap: 16 }}>
                 <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800 }}>{periodAtt.work}</div><div style={{ fontSize: 10, color: "#999" }}>出勤</div></div>
-                <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#c8900a" }}>{periodAtt.paid}</div><div style={{ fontSize: 10, color: "#999" }}>有給</div></div>
+                <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#4a90d9" }}>{periodAtt.paid}</div><div style={{ fontSize: 10, color: "#999" }}>有給</div></div>
                 <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#e55" }}>{periodAtt.absent}</div><div style={{ fontSize: 10, color: "#999" }}>欠勤</div></div>
                 {target61 && <div style={{ marginLeft: "auto", textAlign: "right" }}><div style={{ fontSize: 11, color: "#bbb" }}>61%目標営収（税込）</div><div style={{ fontSize: 14, fontWeight: 700 }}>¥{fmt(Math.round(target61 * 1.1))}</div></div>}
               </div>
@@ -420,7 +420,7 @@ export default function TaxiSalesApp() {
             </div>
             <div style={{ display: "flex", gap: 12, marginTop: 16, paddingTop: 14, borderTop: "1px solid #f0f0f0", justifyContent: "center", flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 18, height: 18, background: "#111", borderRadius: 5 }} />出勤</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 18, height: 18, background: "#F6BE00", borderRadius: 5 }} />有給</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 18, height: 18, background: "#4a90d9", borderRadius: 5 }} />有給</div>
               <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 18, height: 18, background: "#e55", borderRadius: 5 }} />欠勤</div>
               <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 18, height: 18, border: "2px solid #111", borderRadius: 5 }} />今日</div>
             </div>
@@ -491,7 +491,7 @@ export default function TaxiSalesApp() {
 
 const STATE_STYLE = {
   work:       { bg: "#111",    text: "#fff",  border: "none" },
-  paid_leave: { bg: "#F6BE00", text: "#333",  border: "none" },
+  paid_leave: { bg: "#4a90d9", text: "#fff",  border: "none" },
   absent:     { bg: "#e55",    text: "#fff",  border: "none" },
 };
 
@@ -500,7 +500,7 @@ const CalDay = memo(({ day, isToday, state, dow, calYear, calMonth, onToggle }) 
   const bg = s ? s.bg : "transparent";
   const textColor = s ? s.text : isToday ? "#111" : dow===0 ? "#e55" : dow===6 ? "#55a" : "#333";
   const border = isToday
-    ? (state === 'work' ? "2.5px solid #F6BE00" : state === 'absent' ? "2.5px solid #fff" : "2.5px solid #111")
+    ? (state === 'work' ? "2.5px solid #F6BE00" : state === 'paid_leave' ? "2.5px solid #999" : state === 'absent' ? "2.5px solid #fff" : "2.5px solid #111")
     : "2px solid transparent";
   return (
     <button onClick={() => onToggle(calYear, calMonth, day)} style={{ border, borderRadius: 9, padding: "7px 2px", cursor: "pointer", background: bg, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
