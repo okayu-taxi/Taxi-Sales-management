@@ -4,6 +4,29 @@ const LazyChart = lazy(() => import("./SalesChart"));
 
 const STORAGE_KEY = "taxi_sales_data_v3";
 
+// 61%歩合達成に必要な営収テーブル（key: 出勤数_有給数）
+const TARGET_61 = {
+  "24_0": 627110,
+  "23_1": 633200, "23_0": 638660,
+  "22_2": 639320, "22_1": 644770, "22_0": 650230,
+  "21_3": 645440, "21_2": 650890, "21_1": 656340, "21_0": 661800,
+  "20_4": 651550, "20_3": 657000, "20_2": 662460, "20_1": 667910, "20_0": 673370,
+};
+
+const STEP_UP = 584091;
+
+function getCommissionRate(revenue, t61) {
+  if (t61 && revenue >= t61) return 61;
+  if (revenue >= STEP_UP) return 56.74;
+  return 50;
+}
+function estimateSalary(revenue, t61) {
+  return Math.round(revenue * getCommissionRate(revenue, t61) / 100);
+}
+function lookup61(work, paid) {
+  return TARGET_61[`${work}_${paid}`] ?? null;
+}
+
 function getDaysInMonth(year, month) { return new Date(year, month + 1, 0).getDate(); }
 function getFirstDayOfWeek(year, month) { return new Date(year, month, 1).getDay(); }
 function getPeriod(year, month, closingDay) {
@@ -25,30 +48,34 @@ function getDatesInPeriod(period) {
 
 const WEEKDAYS = ["日","月","火","水","木","金","土"];
 
-function getNow() {
-  const n = new Date();
-  return { year: n.getFullYear(), month: n.getMonth(), day: n.getDate() };
-}
-
+function getNow() { const n = new Date(); return { year: n.getFullYear(), month: n.getMonth(), day: n.getDate() }; }
 function getCorrectPeriod(closingDay) {
   const n = getNow();
   if (closingDay > 0 && n.day > closingDay) {
-    const m = (n.month + 1) % 12;
-    const y = n.month === 11 ? n.year + 1 : n.year;
-    return { year: y, month: m };
+    return { year: n.month === 11 ? n.year + 1 : n.year, month: (n.month + 1) % 12 };
   }
   return { year: n.year, month: n.month };
 }
-
 function readClosingDay() {
-  try {
-    const s = localStorage.getItem(STORAGE_KEY);
-    return (s ? JSON.parse(s) : null)?.settings?.closingDay ?? 0;
-  } catch { return 0; }
+  try { const s = localStorage.getItem(STORAGE_KEY); return (s ? JSON.parse(s) : null)?.settings?.closingDay ?? 0; }
+  catch { return 0; }
 }
 
 const _now = new Date();
 const today = { year: _now.getFullYear(), month: _now.getMonth(), day: _now.getDate() };
+
+function migrateData(d) {
+  if (!d) return { settings: { closingDay: 0 }, periods: {}, attendance: {} };
+  if (d.attendance) {
+    const mig = {};
+    Object.entries(d.attendance).forEach(([k, v]) => {
+      if (v === true) mig[k] = 'work';
+      else if (typeof v === 'string') mig[k] = v;
+    });
+    d.attendance = mig;
+  }
+  return d;
+}
 
 export default function TaxiSalesApp() {
   const [curYear, setCurYear] = useState(() => getCorrectPeriod(readClosingDay()).year);
@@ -64,18 +91,30 @@ export default function TaxiSalesApp() {
   const [closingInput, setClosingInput] = useState("");
 
   const [data, setData] = useState(() => {
-    try { const s = localStorage.getItem(STORAGE_KEY); return s ? JSON.parse(s) : { settings: { closingDay: 0 }, periods: {}, attendance: {} }; }
+    try { const s = localStorage.getItem(STORAGE_KEY); return migrateData(s ? JSON.parse(s) : null); }
     catch { return { settings: { closingDay: 0 }, periods: {}, attendance: {} }; }
   });
 
   const closingDay = data.settings?.closingDay ?? 0;
+  const attendance = data.attendance || {};
 
   const period = useMemo(() => getPeriod(curYear, curMonth, closingDay), [curYear, curMonth, closingDay]);
   const pKey = useMemo(() => `${period.startYear}-${period.startMonth}-${period.startDay}_${period.endYear}-${period.endMonth}-${period.endDay}`, [period]);
   const pData = useMemo(() => data.periods?.[pKey] || { goal: 0, days: {} }, [data.periods, pKey]);
-  const attendance = data.attendance || {};
-
   const datesInPeriod = useMemo(() => getDatesInPeriod(period), [pKey]);
+
+  const periodAtt = useMemo(() => {
+    let work = 0, paid = 0, absent = 0;
+    datesInPeriod.forEach(d => {
+      const v = attendance[`${d.year}-${d.month}-${d.day}`];
+      if (v === 'work') work++;
+      else if (v === 'paid_leave') paid++;
+      else if (v === 'absent') absent++;
+    });
+    return { work, paid, absent };
+  }, [datesInPeriod, attendance]);
+
+  const target61 = useMemo(() => lookup61(periodAtt.work, periodAtt.paid), [periodAtt.work, periodAtt.paid]);
 
   useEffect(() => {
     const tin = datesInPeriod.find(d => d.year === today.year && d.month === today.month && d.day === today.day);
@@ -85,13 +124,10 @@ export default function TaxiSalesApp() {
 
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {} }, [data]);
 
-  // iOSのバックグラウンド復帰時に今日の期間へリセット
   useEffect(() => {
     const onPageShow = () => {
-      const cd = readClosingDay();
-      const { year, month } = getCorrectPeriod(cd);
-      setCurYear(year);
-      setCurMonth(month);
+      const { year, month } = getCorrectPeriod(readClosingDay());
+      setCurYear(year); setCurMonth(month);
     };
     window.addEventListener('pageshow', onPageShow);
     return () => window.removeEventListener('pageshow', onPageShow);
@@ -100,27 +136,42 @@ export default function TaxiSalesApp() {
   const updPeriod = useCallback((np) => setData(p => ({ ...p, periods: { ...p.periods, [pKey]: np } })), [pKey]);
   const saveDay = useCallback(() => { const a = parseInt(inputAmount.replace(/,/g, "")); if (!a || isNaN(a)) return; updPeriod({ ...pData, days: { ...pData.days, [inputDateKey]: a } }); setInputAmount(""); }, [inputAmount, inputDateKey, pData, updPeriod]);
   const saveGoal = useCallback(() => { const g = parseInt(goalInput.replace(/,/g, "")); if (!g || isNaN(g)) return; updPeriod({ ...pData, goal: g }); setGoalInput(""); setEditingGoal(false); }, [goalInput, pData, updPeriod]);
+  const autoSetGoal61 = useCallback(() => { if (target61) updPeriod({ ...pData, goal: target61 }); }, [target61, pData, updPeriod]);
   const deleteDay = useCallback((key) => { const nd = { ...pData.days }; delete nd[key]; updPeriod({ ...pData, days: nd }); }, [pData, updPeriod]);
   const saveClosing = useCallback(() => { const v = parseInt(closingInput); if (isNaN(v) || v < 0 || v > 28) return; setData(p => ({ ...p, settings: { ...p.settings, closingDay: v } })); setClosingInput(""); setEditingClosing(false); }, [closingInput]);
-  const toggleAtt = useCallback((y, m, d) => { const key = `${y}-${m}-${d}`; setData(p => { const na = { ...p.attendance }; if (na[key]) delete na[key]; else na[key] = true; return { ...p, attendance: na }; }); }, []);
-  const isAtt = useCallback((y, m, d) => !!attendance[`${y}-${m}-${d}`], [attendance]);
+
+  const toggleAtt = useCallback((y, m, d) => {
+    const key = `${y}-${m}-${d}`;
+    setData(p => {
+      const na = { ...p.attendance };
+      const cur = na[key];
+      if (!cur) na[key] = 'work';
+      else if (cur === 'work') na[key] = 'paid_leave';
+      else if (cur === 'paid_leave') na[key] = 'absent';
+      else delete na[key];
+      return { ...p, attendance: na };
+    });
+  }, []);
+
+  const getAttState = useCallback((y, m, d) => attendance[`${y}-${m}-${d}`] || null, [attendance]);
 
   const total = useMemo(() => Object.values(pData.days).reduce((a, b) => a + b, 0), [pData.days]);
   const goal = pData.goal || 0;
   const remaining = Math.max(0, goal - total);
+  const commissionRate = useMemo(() => getCommissionRate(total, target61), [total, target61]);
+  const estimatedSalary = useMemo(() => estimateSalary(total, target61), [total, target61]);
 
   const { daysLeft, totalDays } = useMemo(() => {
-    const dates = datesInPeriod;
-    const idx = dates.findIndex(d => d.year === today.year && d.month === today.month && d.day === today.day);
-    return { daysLeft: idx === -1 ? 0 : dates.length - idx, totalDays: dates.length };
+    const idx = datesInPeriod.findIndex(d => d.year === today.year && d.month === today.month && d.day === today.day);
+    return { daysLeft: idx === -1 ? 0 : datesInPeriod.length - idx, totalDays: datesInPeriod.length };
   }, [datesInPeriod]);
 
   const attLeft = useMemo(() => datesInPeriod.filter(d => {
     const key = `${d.year}-${d.month}-${d.day}`;
-    return attendance[key] && new Date(d.year, d.month, d.day) >= new Date(today.year, today.month, today.day);
+    return attendance[key] === 'work' && new Date(d.year, d.month, d.day) >= new Date(today.year, today.month, today.day);
   }).length, [datesInPeriod, attendance]);
 
-  const hasAtt = Object.keys(attendance).length > 0;
+  const hasAtt = Object.values(attendance).some(v => v === 'work');
   const effLeft = hasAtt ? attLeft : daysLeft;
   const dailyNeeded = effLeft > 0 ? Math.ceil(remaining / effLeft) : 0;
   const pct = goal > 0 ? Math.min(100, Math.round((total / goal) * 100)) : 0;
@@ -139,17 +190,21 @@ export default function TaxiSalesApp() {
   const nextCal = useCallback(() => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); } else setCalMonth(m => m + 1); }, [calMonth]);
 
   const fmt = (n) => n.toLocaleString("ja-JP");
-
   const sortedKeys = useMemo(() => Object.keys(pData.days).sort((a, b) => { const p = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y,m,d); }; return p(a)-p(b); }), [pData.days]);
   const fmtKey = (k) => { const [,m,d] = k.split("-").map(Number); return `${m+1}月${d}日`; };
   const closingLabel = closingDay === 0 ? "末日締め" : `毎月${closingDay}日締め`;
 
-  const { calDays, calFirst, calCells, calAttCount } = useMemo(() => {
+  const { calDays, calFirst, calCells, calWorkCount, calPaidCount } = useMemo(() => {
     const calDays = getDaysInMonth(calYear, calMonth);
     const calFirst = getFirstDayOfWeek(calYear, calMonth);
     const calCells = [...Array(calFirst).fill(null), ...Array.from({length: calDays}, (_, i) => i + 1)];
-    const calAttCount = Array.from({length: calDays}, (_, i) => i + 1).filter(d => !!attendance[`${calYear}-${calMonth}-${d}`]).length;
-    return { calDays, calFirst, calCells, calAttCount };
+    let calWorkCount = 0, calPaidCount = 0;
+    Array.from({length: calDays}, (_, i) => i + 1).forEach(d => {
+      const v = attendance[`${calYear}-${calMonth}-${d}`];
+      if (v === 'work') calWorkCount++;
+      else if (v === 'paid_leave') calPaidCount++;
+    });
+    return { calDays, calFirst, calCells, calWorkCount, calPaidCount };
   }, [calYear, calMonth, attendance]);
 
   return (
@@ -176,10 +231,42 @@ export default function TaxiSalesApp() {
       <div style={{ padding: "16px" }}>
 
         {activeTab === "home" && <>
+
+          {/* 給料推定カード */}
+          <div style={card}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <span style={lbl}>給料推定</span>
+              <div style={{ background: commissionRate === 61 ? "#F6BE00" : commissionRate === 56.74 ? "#e8e8e8" : "#f0f0f0", borderRadius: 99, padding: "3px 10px", fontSize: 13, fontWeight: 700, color: "#111" }}>{commissionRate}%歩合</div>
+            </div>
+            <div style={{ fontSize: 32, fontWeight: 800, marginBottom: 4 }}>¥{fmt(estimatedSalary)}</div>
+            <div style={{ fontSize: 11, color: "#bbb", marginBottom: 12 }}>¥{fmt(total)} × {commissionRate}%</div>
+            {target61 ? (
+              total >= target61 ? (
+                <div style={{ background: "#F6BE00", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>🎉 61%達成！</div>
+                </div>
+              ) : (
+                <div style={{ background: "#f5f5f5", borderRadius: 10, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>61%達成まであと</div>
+                  <div style={{ fontSize: 22, fontWeight: 700 }}>¥{fmt(target61 - total)}</div>
+                  <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>61%目標営収：¥{fmt(target61)}　推定給料：¥{fmt(Math.round(target61 * 0.61))}</div>
+                </div>
+              )
+            ) : (
+              <div style={{ fontSize: 12, color: "#ccc" }}>カレンダーで出勤・有給を登録すると61%目標が表示されます</div>
+            )}
+          </div>
+
+          {/* 期間目標カード */}
           <div style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <span style={lbl}>期間目標</span>
-              <button onClick={() => { setEditingGoal(!editingGoal); setGoalInput(""); }} style={ghostBtn}>{editingGoal ? "キャンセル" : "設定"}</button>
+              <span style={lbl}>期間目標（営収）</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                {target61 && !editingGoal && (
+                  <button onClick={autoSetGoal61} style={{ ...ghostBtn, fontSize: 11, color: "#c8900a", borderColor: "#F6BE00" }}>61%自動設定</button>
+                )}
+                <button onClick={() => { setEditingGoal(!editingGoal); setGoalInput(""); }} style={ghostBtn}>{editingGoal ? "キャンセル" : "手動設定"}</button>
+              </div>
             </div>
             {editingGoal ? (
               <div style={{ display: "flex", gap: 8 }}>
@@ -189,6 +276,7 @@ export default function TaxiSalesApp() {
             ) : <div style={{ fontSize: 34, fontWeight: 800 }}>¥{fmt(goal)}</div>}
           </div>
 
+          {/* 期間売上カード */}
           <div style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
               <span style={lbl}>期間売上</span>
@@ -214,6 +302,7 @@ export default function TaxiSalesApp() {
             )}
           </div>
 
+          {/* 売上入力カード */}
           <div style={card}>
             <div style={{ ...lbl, marginBottom: 12 }}>売上を入力</div>
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
@@ -241,14 +330,28 @@ export default function TaxiSalesApp() {
 
         {activeTab === "calendar" && <>
           <div style={{ ...card, padding: "12px 16px", marginBottom: 12 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "#aaa", lineHeight: 1.7 }}>日付をタップして出勤日を設定。出勤日を登録すると、ホームの必要売上が「残り出勤日ベース」で計算されます。</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#aaa", lineHeight: 1.8 }}>
+              タップするたびに切り替わります：<br />
+              <span style={{ color: "#111", fontWeight: 700 }}>出勤</span>　→　<span style={{ color: "#c8900a", fontWeight: 700 }}>有給</span>　→　<span style={{ color: "#e55", fontWeight: 700 }}>欠勤</span>　→　なし
+            </p>
           </div>
+          {(periodAtt.work > 0 || periodAtt.paid > 0 || periodAtt.absent > 0) && (
+            <div style={{ ...card, padding: "12px 16px", marginBottom: 12 }}>
+              <div style={{ fontSize: 11, color: "#bbb", marginBottom: 8, fontWeight: 700, letterSpacing: 1 }}>今期の出勤状況</div>
+              <div style={{ display: "flex", gap: 16 }}>
+                <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800 }}>{periodAtt.work}</div><div style={{ fontSize: 10, color: "#999" }}>出勤</div></div>
+                <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#c8900a" }}>{periodAtt.paid}</div><div style={{ fontSize: 10, color: "#999" }}>有給</div></div>
+                <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#e55" }}>{periodAtt.absent}</div><div style={{ fontSize: 10, color: "#999" }}>欠勤</div></div>
+                {target61 && <div style={{ marginLeft: "auto", textAlign: "right" }}><div style={{ fontSize: 11, color: "#bbb" }}>61%目標営収</div><div style={{ fontSize: 14, fontWeight: 700 }}>¥{fmt(target61)}</div></div>}
+              </div>
+            </div>
+          )}
           <div style={card}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <button onClick={prevCal} style={navBtn}>‹</button>
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 17, fontWeight: 700 }}>{calYear}年{calMonth + 1}月</div>
-                <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>出勤予定：{calAttCount}日</div>
+                <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>出勤{calWorkCount}日　有給{calPaidCount}日</div>
               </div>
               <button onClick={nextCal} style={navBtn}>›</button>
             </div>
@@ -259,14 +362,16 @@ export default function TaxiSalesApp() {
               {calCells.map((day, idx) => {
                 if (!day) return <div key={`e-${idx}`} />;
                 const isToday = calYear===today.year && calMonth===today.month && day===today.day;
-                const worked = isAtt(calYear, calMonth, day);
+                const state = getAttState(calYear, calMonth, day);
                 const dow = (calFirst + day - 1) % 7;
-                return <CalDay key={day} day={day} isToday={isToday} worked={worked} dow={dow} calYear={calYear} calMonth={calMonth} onToggle={toggleAtt} />;
+                return <CalDay key={day} day={day} isToday={isToday} state={state} dow={dow} calYear={calYear} calMonth={calMonth} onToggle={toggleAtt} />;
               })}
             </div>
-            <div style={{ display: "flex", gap: 20, marginTop: 16, paddingTop: 14, borderTop: "1px solid #f0f0f0", justifyContent: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 11, color: "#999" }}><div style={{ width: 22, height: 22, background: "#111", borderRadius: 7 }} />出勤日</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 11, color: "#999" }}><div style={{ width: 22, height: 22, border: "2px solid #111", borderRadius: 7 }} />今日</div>
+            <div style={{ display: "flex", gap: 12, marginTop: 16, paddingTop: 14, borderTop: "1px solid #f0f0f0", justifyContent: "center", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 18, height: 18, background: "#111", borderRadius: 5 }} />出勤</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 18, height: 18, background: "#F6BE00", borderRadius: 5 }} />有給</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 18, height: 18, background: "#e55", borderRadius: 5 }} />欠勤</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 18, height: 18, border: "2px solid #111", borderRadius: 5 }} />今日</div>
             </div>
           </div>
         </>}
@@ -318,8 +423,16 @@ export default function TaxiSalesApp() {
               </>
             )}
             <div style={{ marginTop: 20, padding: "14px", background: "#f5f5f5", borderRadius: 10 }}>
+              <div style={{ fontSize: 11, color: "#bbb", marginBottom: 8, fontWeight: 600 }}>歩合率のしくみ</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: "#aaa" }}>¥{fmt(STEP_UP)}未満</span><span style={{ fontWeight: 700 }}>50%</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: "#aaa" }}>¥{fmt(STEP_UP)}以上</span><span style={{ fontWeight: 700 }}>56.74%</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: "#aaa" }}>61%目標営収以上</span><span style={{ fontWeight: 700, color: "#c8900a" }}>61%</span></div>
+              </div>
+            </div>
+            <div style={{ marginTop: 12, padding: "14px", background: "#f5f5f5", borderRadius: 10 }}>
               <div style={{ fontSize: 11, color: "#bbb", marginBottom: 6, fontWeight: 600 }}>💡 データについて</div>
-              <div style={{ fontSize: 12, color: "#aaa", lineHeight: 1.8 }}>データはこのデバイスに保存されます。毎日使う限りデータは消えません。App Store公開時にクラウド保存に対応予定です。</div>
+              <div style={{ fontSize: 12, color: "#aaa", lineHeight: 1.8 }}>データはこのデバイスに保存されます。毎日使う限りデータは消えません。</div>
             </div>
           </div>
         )}
@@ -328,12 +441,23 @@ export default function TaxiSalesApp() {
   );
 }
 
-const CalDay = memo(({ day, isToday, worked, dow, calYear, calMonth, onToggle }) => (
-  <button onClick={() => onToggle(calYear, calMonth, day)} style={{ border: worked ? "none" : isToday ? "2px solid #111" : "2px solid transparent", borderRadius: 9, padding: "7px 2px", cursor: "pointer", background: worked ? "#111" : "transparent", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-    <span style={{ fontSize: 14, lineHeight: 1, fontWeight: worked || isToday ? 700 : 400, color: worked ? "#fff" : isToday ? "#111" : dow===0?"#e55":dow===6?"#55a":"#333" }}>{day}</span>
-    {worked && <span style={{ width: 3, height: 3, borderRadius: "50%", background: "#555" }} />}
-  </button>
-));
+const STATE_STYLE = {
+  work:       { bg: "#111",    text: "#fff",  border: "none" },
+  paid_leave: { bg: "#F6BE00", text: "#333",  border: "none" },
+  absent:     { bg: "#e55",    text: "#fff",  border: "none" },
+};
+
+const CalDay = memo(({ day, isToday, state, dow, calYear, calMonth, onToggle }) => {
+  const s = STATE_STYLE[state];
+  const bg = s ? s.bg : "transparent";
+  const textColor = s ? s.text : isToday ? "#111" : dow===0 ? "#e55" : dow===6 ? "#55a" : "#333";
+  const border = s ? "none" : isToday ? "2px solid #111" : "2px solid transparent";
+  return (
+    <button onClick={() => onToggle(calYear, calMonth, day)} style={{ border, borderRadius: 9, padding: "7px 2px", cursor: "pointer", background: bg, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+      <span style={{ fontSize: 14, lineHeight: 1, fontWeight: (state || isToday) ? 700 : 400, color: textColor }}>{day}</span>
+    </button>
+  );
+});
 
 const card = { background: "#fff", border: "1px solid #ebebeb", borderRadius: 14, padding: "16px", marginBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.03)" };
 const lbl = { fontSize: 10, color: "#bbb", letterSpacing: 1.5, fontWeight: 700, textTransform: "uppercase" };
