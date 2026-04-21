@@ -223,7 +223,7 @@ export default function TaxiSalesApp() {
       </div>
 
       <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #ebebeb" }}>
-        {[["home","ホーム"],["graph","グラフ"],["calendar","カレンダー"],["history","履歴"],["settings","設定"]].map(([key, label]) => (
+        {[["home","ホーム"],["graph","給料"],["calendar","出番表"],["history","履歴"],["settings","設定"]].map(([key, label]) => (
           <button key={key} onClick={() => setActiveTab(key)} style={{ flex: 1, padding: "11px 0", border: "none", background: "none", color: activeTab === key ? "#111" : "#ccc", fontWeight: activeTab === key ? 700 : 400, fontSize: 11, cursor: "pointer", borderBottom: activeTab === key ? "2px solid #111" : "2px solid transparent", transition: "all 0.15s" }}>{label}</button>
         ))}
       </div>
@@ -232,29 +232,16 @@ export default function TaxiSalesApp() {
 
         {activeTab === "home" && <>
 
-          {/* 給料推定カード */}
+          {/* 売上入力カード */}
           <div style={card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <span style={lbl}>給料推定</span>
-              <div style={{ background: commissionRate === 61 ? "#F6BE00" : commissionRate === 56.74 ? "#e8e8e8" : "#f0f0f0", borderRadius: 99, padding: "3px 10px", fontSize: 13, fontWeight: 700, color: "#111" }}>{commissionRate}%歩合</div>
+            <div style={{ ...lbl, marginBottom: 12 }}>売上を入力</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <select value={inputDateKey} onChange={e => setInputDateKey(e.target.value)} style={{ ...inputStyle, width: 90, flex: "none" }}>
+                {datesInPeriod.map(d => { const k = `${d.year}-${d.month}-${d.day}`; return <option key={k} value={k}>{d.month+1}/{d.day}</option>; })}
+              </select>
+              <input type="number" placeholder="金額（円）" value={inputAmount} onChange={e => setInputAmount(e.target.value)} style={inputStyle} onKeyDown={e => e.key === "Enter" && saveDay()} />
             </div>
-            <div style={{ fontSize: 32, fontWeight: 800, marginBottom: 4 }}>¥{fmt(estimatedSalary)}</div>
-            <div style={{ fontSize: 11, color: "#bbb", marginBottom: 12 }}>¥{fmt(total)} × {commissionRate}%</div>
-            {target61 ? (
-              total >= target61 ? (
-                <div style={{ background: "#F6BE00", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
-                  <div style={{ fontSize: 15, fontWeight: 800 }}>🎉 61%達成！</div>
-                </div>
-              ) : (
-                <div style={{ background: "#f5f5f5", borderRadius: 10, padding: "12px 14px" }}>
-                  <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>61%達成まであと</div>
-                  <div style={{ fontSize: 22, fontWeight: 700 }}>¥{fmt(target61 - total)}</div>
-                  <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>61%目標営収：¥{fmt(target61)}　推定給料：¥{fmt(Math.round(target61 * 0.61))}</div>
-                </div>
-              )
-            ) : (
-              <div style={{ fontSize: 12, color: "#ccc" }}>カレンダーで出勤・有給を登録すると61%目標が表示されます</div>
-            )}
+            <button onClick={saveDay} style={{ ...primaryBtn, width: "100%", padding: "13px" }}>記録する</button>
           </div>
 
           {/* 期間目標カード */}
@@ -301,34 +288,62 @@ export default function TaxiSalesApp() {
               </div>
             )}
           </div>
+        </>}
 
-          {/* 売上入力カード */}
+        {activeTab === "graph" && <>
+          {/* 給料推定カード */}
           <div style={card}>
-            <div style={{ ...lbl, marginBottom: 12 }}>売上を入力</div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-              <select value={inputDateKey} onChange={e => setInputDateKey(e.target.value)} style={{ ...inputStyle, width: 90, flex: "none" }}>
-                {datesInPeriod.map(d => { const k = `${d.year}-${d.month}-${d.day}`; return <option key={k} value={k}>{d.month+1}/{d.day}</option>; })}
-              </select>
-              <input type="number" placeholder="金額（円）" value={inputAmount} onChange={e => setInputAmount(e.target.value)} style={inputStyle} onKeyDown={e => e.key === "Enter" && saveDay()} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <span style={lbl}>給料推定</span>
+              <div style={{ background: commissionRate === 61 ? "#F6BE00" : commissionRate === 56.74 ? "#e8e8e8" : "#f0f0f0", borderRadius: 99, padding: "3px 10px", fontSize: 13, fontWeight: 700, color: "#111" }}>{commissionRate}%歩合</div>
             </div>
-            <button onClick={saveDay} style={{ ...primaryBtn, width: "100%", padding: "13px" }}>記録する</button>
+            <div style={{ fontSize: 32, fontWeight: 800, marginBottom: 4 }}>¥{fmt(estimatedSalary)}</div>
+            <div style={{ fontSize: 11, color: "#bbb", marginBottom: 12 }}>¥{fmt(total)} × {commissionRate}%</div>
+            {target61 ? (
+              total >= target61 ? (
+                <div style={{ background: "#F6BE00", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>🎉 61%達成！</div>
+                </div>
+              ) : (
+                <div style={{ background: "#f5f5f5", borderRadius: 10, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>61%達成まであと（税込）</div>
+                  <div style={{ fontSize: 22, fontWeight: 700 }}>¥{fmt(Math.round((target61 - total) * 1.1))}</div>
+                  <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>61%目標営収（税込）：¥{fmt(Math.round(target61 * 1.1))}　推定給料：¥{fmt(Math.round(target61 * 1.1 * 0.61))}</div>
+                </div>
+              )
+            ) : (
+              <div style={{ fontSize: 12, color: "#ccc" }}>出番表で出勤・有給を登録すると61%目標が表示されます</div>
+            )}
+          </div>
+
+          {/* 歩合率のしくみ */}
+          <div style={card}>
+            <div style={{ ...lbl, marginBottom: 12 }}>歩合率のしくみ</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "#f5f5f5", borderRadius: 10 }}>
+                <span style={{ fontSize: 13, color: "#aaa" }}>¥{fmt(STEP_UP)}未満</span>
+                <span style={{ fontSize: 16, fontWeight: 800 }}>50%</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "#f5f5f5", borderRadius: 10 }}>
+                <span style={{ fontSize: 13, color: "#aaa" }}>¥{fmt(STEP_UP)}以上</span>
+                <span style={{ fontSize: 16, fontWeight: 800 }}>56.74%</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "#FFF8E0", borderRadius: 10, border: "1px solid #F6BE00" }}>
+                <span style={{ fontSize: 13, color: "#aaa" }}>61%目標営収以上</span>
+                <span style={{ fontSize: 16, fontWeight: 800, color: "#c8900a" }}>61%</span>
+              </div>
+            </div>
+            {target61 && (
+              <div style={{ marginTop: 12, padding: "12px 14px", background: "#f5f5f5", borderRadius: 10 }}>
+                <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>今期の61%目標営収（税込）</div>
+                <div style={{ fontSize: 20, fontWeight: 800 }}>¥{fmt(Math.round(target61 * 1.1))}</div>
+                <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>出勤{periodAtt.work}日・有給{periodAtt.paid}日</div>
+              </div>
+            )}
           </div>
         </>}
 
-        {activeTab === "graph" && (
-          <div style={card}>
-            <div style={{ ...lbl, marginBottom: 16 }}>売上推移</div>
-            {Object.keys(pData.days).length === 0 ? (
-              <div style={{ textAlign: "center", color: "#ccc", padding: "40px 0" }}>まだデータがありません</div>
-            ) : (
-              <Suspense fallback={<div style={{ textAlign: "center", color: "#ccc", padding: "40px 0" }}>読み込み中…</div>}>
-                <LazyChart chartData={chartData} goal={goal} totalDays={totalDays} fmt={fmt} />
-              </Suspense>
-            )}
-          </div>
-        )}
-
-        {activeTab === "calendar" && <>
+        {activeTab === "calendar" && <> {/* 出番表 */}
           <div style={{ ...card, padding: "12px 16px", marginBottom: 12 }}>
             <p style={{ margin: 0, fontSize: 12, color: "#aaa", lineHeight: 1.8 }}>
               タップするたびに切り替わります：<br />
@@ -423,14 +438,6 @@ export default function TaxiSalesApp() {
               </>
             )}
             <div style={{ marginTop: 20, padding: "14px", background: "#f5f5f5", borderRadius: 10 }}>
-              <div style={{ fontSize: 11, color: "#bbb", marginBottom: 8, fontWeight: 600 }}>歩合率のしくみ</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: "#aaa" }}>¥{fmt(STEP_UP)}未満</span><span style={{ fontWeight: 700 }}>50%</span></div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: "#aaa" }}>¥{fmt(STEP_UP)}以上</span><span style={{ fontWeight: 700 }}>56.74%</span></div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: "#aaa" }}>61%目標営収以上</span><span style={{ fontWeight: 700, color: "#c8900a" }}>61%</span></div>
-              </div>
-            </div>
-            <div style={{ marginTop: 12, padding: "14px", background: "#f5f5f5", borderRadius: 10 }}>
               <div style={{ fontSize: 11, color: "#bbb", marginBottom: 6, fontWeight: 600 }}>💡 データについて</div>
               <div style={{ fontSize: 12, color: "#aaa", lineHeight: 1.8 }}>データはこのデバイスに保存されます。毎日使う限りデータは消えません。</div>
             </div>
