@@ -13,12 +13,23 @@ const TARGET_61 = {
   "20_4": 651550, "20_3": 657000, "20_2": 662460, "20_1": 667910, "20_0": 673370,
 };
 
-const STEP_UP = 584091;
+const STEP_UP = 584091; // 56.74%基準営収（税抜）
 
 function getCommissionRate(revenue, t61) {
-  if (t61 && revenue >= t61) return 61;
-  if (revenue >= STEP_UP) return 56.74;
-  return 50;
+  if (!t61) {
+    // t61不明時：STEP_UPを境にステップ関数（参考値）
+    if (revenue >= STEP_UP) return 56.74;
+    return 50;
+  }
+  // (STEP_UP, 56.74%) と (t61, 61%) を通る一次関数
+  const slope = (61 - 56.74) / (t61 - STEP_UP);
+  const rate = 56.74 + slope * (revenue - STEP_UP);
+  return Math.max(50, Math.min(61, parseFloat(rate.toFixed(2))));
+}
+function calc50Threshold(t61) {
+  if (!t61) return null;
+  const slope = (61 - 56.74) / (t61 - STEP_UP);
+  return Math.round(STEP_UP - 6.74 / slope);
 }
 function estimateSalary(revenue, t61) {
   return Math.round(revenue * getCommissionRate(revenue, t61) / 100);
@@ -197,6 +208,7 @@ export default function TaxiSalesApp() {
   const remaining = Math.max(0, goal - total);
   const commissionRate = useMemo(() => getCommissionRate(total, target61), [total, target61]);
   const estimatedSalary = useMemo(() => estimateSalary(total, target61), [total, target61]);
+  const rate50 = useMemo(() => calc50Threshold(target61), [target61]);
 
   const { daysLeft, totalDays } = useMemo(() => {
     const idx = datesInPeriod.findIndex(d => d.year === today.year && d.month === today.month && d.day === today.day);
@@ -331,7 +343,7 @@ export default function TaxiSalesApp() {
           <div style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <span style={lbl}>給料推定</span>
-              <div style={{ background: commissionRate === 61 ? "#F6BE00" : commissionRate === 56.74 ? "#e8e8e8" : "#f0f0f0", borderRadius: 99, padding: "3px 10px", fontSize: 13, fontWeight: 700, color: "#111" }}>{commissionRate}%歩合</div>
+              <div style={{ background: commissionRate >= 61 ? "#F6BE00" : commissionRate > 56.74 ? "#FFF0A0" : "#f0f0f0", borderRadius: 99, padding: "3px 10px", fontSize: 13, fontWeight: 700, color: "#111" }}>{commissionRate}%歩合</div>
             </div>
             <div style={{ fontSize: 32, fontWeight: 800, marginBottom: 4 }}>¥{fmt(estimatedSalary)}</div>
             <div style={{ fontSize: 11, color: "#bbb", marginBottom: 12 }}>¥{fmt(total)} × {commissionRate}%</div>
@@ -340,11 +352,24 @@ export default function TaxiSalesApp() {
                 <div style={{ background: "#F6BE00", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
                   <div style={{ fontSize: 15, fontWeight: 800 }}>🎉 61%達成！</div>
                 </div>
-              ) : (
+              ) : total >= STEP_UP ? (
                 <div style={{ background: "#f5f5f5", borderRadius: 10, padding: "12px 14px" }}>
                   <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>61%達成まであと（税込）</div>
                   <div style={{ fontSize: 22, fontWeight: 700 }}>¥{fmt(Math.round((target61 - total) * 1.1))}</div>
-                  <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>61%目標営収（税込）：¥{fmt(Math.round(target61 * 1.1))}　推定給料：¥{fmt(Math.round(target61 * 1.1 * 0.61))}</div>
+                  <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>目標（税込）¥{fmt(Math.round(target61 * 1.1))}　達成時給料 ¥{fmt(Math.round(target61 * 0.61))}</div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ background: "#f5f5f5", borderRadius: 10, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>56.74%まであと（税込）</div>
+                    <div style={{ fontSize: 20, fontWeight: 700 }}>¥{fmt(Math.round((STEP_UP - total) * 1.1))}</div>
+                    <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>基準営収（税込）¥{fmt(Math.round(STEP_UP * 1.1))}</div>
+                  </div>
+                  <div style={{ background: "#f5f5f5", borderRadius: 10, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>61%まであと（税込）</div>
+                    <div style={{ fontSize: 20, fontWeight: 700 }}>¥{fmt(Math.round((target61 - total) * 1.1))}</div>
+                    <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>目標（税込）¥{fmt(Math.round(target61 * 1.1))}　達成時給料 ¥{fmt(Math.round(target61 * 0.61))}</div>
+                  </div>
                 </div>
               )
             ) : (
@@ -354,28 +379,35 @@ export default function TaxiSalesApp() {
 
           {/* 歩合率のしくみ */}
           <div style={card}>
-            <div style={{ ...lbl, marginBottom: 12 }}>歩合率のしくみ</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "#f5f5f5", borderRadius: 10 }}>
-                <span style={{ fontSize: 13, color: "#aaa" }}>¥{fmt(STEP_UP)}未満</span>
-                <span style={{ fontSize: 16, fontWeight: 800 }}>50%</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "#f5f5f5", borderRadius: 10 }}>
-                <span style={{ fontSize: 13, color: "#aaa" }}>¥{fmt(STEP_UP)}以上</span>
+            <div style={{ ...lbl, marginBottom: 4 }}>歩合率のしくみ</div>
+            <div style={{ fontSize: 11, color: "#ccc", marginBottom: 12 }}>営収に応じて50〜61%の間で線形に変動</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {rate50 && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#f5f5f5", borderRadius: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#aaa" }}>最低ライン（税込）</div>
+                    <div style={{ fontSize: 12, color: "#bbb" }}>〜¥{fmt(Math.round(rate50 * 1.1))}</div>
+                  </div>
+                  <span style={{ fontSize: 16, fontWeight: 800 }}>50%</span>
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#f5f5f5", borderRadius: 10 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: "#aaa" }}>基準（税込）</div>
+                  <div style={{ fontSize: 12, color: "#bbb" }}>¥{fmt(Math.round(STEP_UP * 1.1))}</div>
+                </div>
                 <span style={{ fontSize: 16, fontWeight: 800 }}>56.74%</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "#FFF8E0", borderRadius: 10, border: "1px solid #F6BE00" }}>
-                <span style={{ fontSize: 13, color: "#aaa" }}>61%目標営収以上</span>
-                <span style={{ fontSize: 16, fontWeight: 800, color: "#c8900a" }}>61%</span>
-              </div>
+              {target61 && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#FFF8E0", borderRadius: 10, border: "1px solid #F6BE00" }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#aaa" }}>61%目標（税込）・出勤{periodAtt.work}日有給{periodAtt.paid}日</div>
+                    <div style={{ fontSize: 12, color: "#bbb" }}>¥{fmt(Math.round(target61 * 1.1))}</div>
+                  </div>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: "#c8900a" }}>61%</span>
+                </div>
+              )}
             </div>
-            {target61 && (
-              <div style={{ marginTop: 12, padding: "12px 14px", background: "#f5f5f5", borderRadius: 10 }}>
-                <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>今期の61%目標営収（税込）</div>
-                <div style={{ fontSize: 20, fontWeight: 800 }}>¥{fmt(Math.round(target61 * 1.1))}</div>
-                <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>出勤{periodAtt.work}日・有給{periodAtt.paid}日</div>
-              </div>
-            )}
           </div>
         </>}
 
