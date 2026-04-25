@@ -561,8 +561,6 @@ export default function TaxiSalesApp() {
             <div style={statCard}>
               <div style={statTitle}>今日までの1日平均</div>
               <div style={statValue}>¥{fmt(avgSoFar)}</div>
-              <div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>自腹高速 合計</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#e55" }}>¥{fmt(tollTotal)}</div>
             </div>
           </div>
 
@@ -605,9 +603,13 @@ export default function TaxiSalesApp() {
                 {(() => { const [y,m,d] = inputDateKey.split("-").map(Number); if (!y) return ""; const w = WEEKDAYS[new Date(y, m, d).getDay()]; return `${m+1}月${d}日(${w})`; })()}
               </span>
             </div>
-            <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "stretch", marginBottom: 8 }}>
               <input type="number" placeholder="自腹高速（円）" value={inputToll} onChange={e => setInputToll(e.target.value)} style={{ ...inputStyle, padding: "8px 10px", minWidth: 0, boxSizing: "border-box" }} onKeyDown={e => e.key === "Enter" && saveToll()} />
               <button onClick={saveToll} style={{ ...primaryBtn, padding: "8px 14px", flex: "none", whiteSpace: "nowrap" }}>{pData.days[inputDateKey]?.toll ? "更新" : "記録"}</button>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "6px 10px", background: "#fafafa", borderRadius: 8 }}>
+              <span style={{ fontSize: 11, color: "#999", fontWeight: 600 }}>今期の自腹高速 合計</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: "#e55" }}>¥{fmt(tollTotal)}</span>
             </div>
           </div>
         </>}
