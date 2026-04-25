@@ -5,51 +5,33 @@ const LazyChart = lazy(() => import("./SalesChart"));
 
 const STORAGE_KEY = "taxi_sales_data_v3";
 
-// 61%歩合達成に必要な営収テーブル（key: 出勤数_有給数）
-const TARGET_61 = {
-  "24_0": 627110,
-  "23_1": 633200, "23_0": 638660,
-  "22_2": 639320, "22_1": 644770, "22_0": 650230,
-  "21_3": 645440, "21_2": 650890, "21_1": 656340, "21_0": 661800,
-  "20_4": 651550, "20_3": 657000, "20_2": 662460, "20_1": 667910, "20_0": 673370,
-};
-
 const DEFAULT_COMMISSION = {
-  minRate: 0,
-  midRate: 0,
-  maxRate: 0,
-  midThreshold: 0,    // 中段歩合の境界営収（税抜）
-  customTarget: null, // 上限歩合のターゲット営収（税抜） null=出勤テーブル使用
+  tiers: [], // [{ threshold: number(税抜), rate: number(%)}]
 };
 
-function getCommissionRate(revenue, t61, conf = DEFAULT_COMMISSION) {
-  const { minRate, midRate, maxRate, midThreshold } = conf;
-  if (!t61 || t61 === midThreshold) {
-    if (midThreshold > 0 && revenue >= midThreshold) return midRate;
-    return minRate;
-  }
-  const slope = (maxRate - midRate) / (t61 - midThreshold);
-  const rate = midRate + slope * (revenue - midThreshold);
-  const lo = Math.min(minRate, maxRate);
-  const hi = Math.max(minRate, maxRate);
-  return Math.max(lo, Math.min(hi, parseFloat(rate.toFixed(2))));
+function sortTiers(tiers) {
+  return [...(tiers || [])].sort((a, b) => (a.threshold || 0) - (b.threshold || 0));
 }
-function calc50Threshold(t61, conf = DEFAULT_COMMISSION) {
-  if (!t61) return null;
-  const { minRate, midRate, maxRate, midThreshold } = conf;
-  if (maxRate === midRate || t61 === midThreshold) return null;
-  const slope = (maxRate - midRate) / (t61 - midThreshold);
-  if (slope === 0) return null;
-  return Math.round(midThreshold - (midRate - minRate) / slope);
+
+function getCommissionRate(revenue, conf = DEFAULT_COMMISSION) {
+  const tiers = sortTiers(conf?.tiers);
+  if (tiers.length === 0) return 0;
+  let rate = 0;
+  for (const t of tiers) {
+    if (revenue >= (t.threshold || 0)) rate = t.rate || 0;
+    else break;
+  }
+  return rate;
 }
 function toTaxInc(amount) {
   return Math.ceil(amount * 1.1 / 10) * 10;
 }
-function estimateSalary(revenue, t61, conf = DEFAULT_COMMISSION) {
-  return Math.round(revenue * getCommissionRate(revenue, t61, conf) / 100);
+function estimateSalary(revenue, conf = DEFAULT_COMMISSION) {
+  return Math.round(revenue * getCommissionRate(revenue, conf) / 100);
 }
-function lookup61(work, paid) {
-  return TARGET_61[`${work}_${paid}`] ?? null;
+function topTier(conf) {
+  const tiers = sortTiers(conf?.tiers);
+  return tiers.length > 0 ? tiers[tiers.length - 1] : null;
 }
 
 function getDaysInMonth(year, month) { return new Date(year, month + 1, 0).getDate(); }
@@ -90,9 +72,19 @@ const _now = new Date();
 const today = { year: _now.getFullYear(), month: _now.getMonth(), day: _now.getDate() };
 
 function migrateData(d) {
-  if (!d) return { settings: { closingDay: 0, commission: { ...DEFAULT_COMMISSION } }, periods: {}, attendance: {} };
+  if (!d) return { settings: { closingDay: 0, commission: { tiers: [] } }, periods: {}, attendance: {} };
   d.settings = d.settings || {};
-  d.settings.commission = { ...DEFAULT_COMMISSION, ...(d.settings.commission || {}) };
+  // Migrate from legacy minRate/midRate/maxRate/midThreshold/customTarget into tiers
+  const old = d.settings.commission;
+  if (!old || !Array.isArray(old.tiers)) {
+    const tiers = [];
+    if (old) {
+      if (old.minRate > 0) tiers.push({ threshold: 0, rate: Number(old.minRate) });
+      if (old.midThreshold > 0 && old.midRate > 0) tiers.push({ threshold: Number(old.midThreshold), rate: Number(old.midRate) });
+      if (old.customTarget > 0 && old.maxRate > 0) tiers.push({ threshold: Number(old.customTarget), rate: Number(old.maxRate) });
+    }
+    d.settings.commission = { tiers };
+  }
   if (d.attendance) {
     const mig = {};
     Object.entries(d.attendance).forEach(([k, v]) => {
@@ -154,10 +146,9 @@ export default function TaxiSalesApp() {
   }, [datesInPeriod, attendance]);
 
   const commission = useMemo(() => ({ ...DEFAULT_COMMISSION, ...(data.settings?.commission || {}) }), [data.settings?.commission]);
-  const target61 = useMemo(() => {
-    if (commission.customTarget != null && commission.customTarget > 0) return commission.customTarget;
-    return lookup61(periodAtt.work, periodAtt.paid);
-  }, [periodAtt.work, periodAtt.paid, commission.customTarget]);
+  const sortedTiers = useMemo(() => sortTiers(commission.tiers), [commission.tiers]);
+  const topRateTier = useMemo(() => sortedTiers.length > 0 ? sortedTiers[sortedTiers.length - 1] : null, [sortedTiers]);
+  const targetTop = topRateTier?.threshold || 0;
 
   useEffect(() => {
     const tin = datesInPeriod.find(d => d.year === today.year && d.month === today.month && d.day === today.day);
@@ -310,9 +301,9 @@ export default function TaxiSalesApp() {
     setInputToll("");
   }, [inputToll, inputTollDateKey, pData, updPeriod]);
   const saveGoal = useCallback(() => { const g = parseInt(goalInput.replace(/,/g, "")); if (!g || isNaN(g)) return; updPeriod({ ...pData, goal: g }); setGoalInput(""); setEditingGoal(false); }, [goalInput, pData, updPeriod]);
-  const autoSetGoal61 = useCallback(() => {
-    if (!target61) return;
-    const newGoal = toTaxInc(target61);
+  const autoSetGoalTop = useCallback(() => {
+    if (!targetTop) return;
+    const newGoal = toTaxInc(targetTop);
     setData(p => ({
       ...p,
       periods: {
@@ -320,7 +311,7 @@ export default function TaxiSalesApp() {
         [pKey]: { ...(p.periods?.[pKey] || { days: {} }), goal: newGoal }
       }
     }));
-  }, [target61, pKey]);
+  }, [targetTop, pKey]);
   const deleteDay = useCallback((key) => { const nd = { ...pData.days }; delete nd[key]; updPeriod({ ...pData, days: nd }); }, [pData, updPeriod]);
 
   const deleteSales = useCallback(() => {
@@ -375,9 +366,8 @@ export default function TaxiSalesApp() {
   const tollTotal = useMemo(() => Object.values(pData.days).reduce((a, b) => a + (b?.toll || 0), 0), [pData.days]);
   const goal = pData.goal || 0;
   const remaining = Math.max(0, goal - total);
-  const commissionRate = useMemo(() => getCommissionRate(total, target61, commission), [total, target61, commission]);
-  const estimatedSalary = useMemo(() => estimateSalary(total, target61, commission), [total, target61, commission]);
-  const rate50 = useMemo(() => calc50Threshold(target61, commission), [target61, commission]);
+  const commissionRate = useMemo(() => getCommissionRate(total, commission), [total, commission]);
+  const estimatedSalary = useMemo(() => estimateSalary(total, commission), [total, commission]);
 
   const { daysLeft, totalDays, todayIndex } = useMemo(() => {
     const idx = datesInPeriod.findIndex(d => d.year === today.year && d.month === today.month && d.day === today.day);
@@ -495,7 +485,7 @@ export default function TaxiSalesApp() {
                   <input type="number" placeholder="目標額" value={goalInput} onChange={e => setGoalInput(e.target.value)} style={{ ...inputStyle, fontSize: 16, padding: "6px 8px", marginTop: 4 }} onKeyDown={e => e.key === "Enter" && saveGoal()} />
                   <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
                     <button onClick={saveGoal} style={{ ...primaryBtn, flex: 1, padding: "5px", fontSize: 12 }}>保存</button>
-                    {target61 && <button onClick={autoSetGoal61} style={{ ...ghostBtn, flex: 1, padding: "5px", fontSize: 11, color: "#c8900a", borderColor: "#F6BE00" }}>{commission.maxRate}%自動</button>}
+                    {topRateTier && targetTop > 0 && <button onClick={autoSetGoalTop} style={{ ...ghostBtn, flex: 1, padding: "5px", fontSize: 11, color: "#c8900a", borderColor: "#F6BE00" }}>{topRateTier.rate}%自動</button>}
                   </div>
                 </>
               ) : (
@@ -585,71 +575,54 @@ export default function TaxiSalesApp() {
           <div style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <span style={lbl}>給料推定</span>
-              <div style={{ background: commissionRate >= commission.maxRate ? "#F6BE00" : commissionRate > commission.midRate ? "#FFF0A0" : "#f0f0f0", borderRadius: 99, padding: "3px 10px", fontSize: 13, fontWeight: 700, color: "#111" }}>{commissionRate}%歩合</div>
+              <div style={{ background: topRateTier && commissionRate >= topRateTier.rate ? "#F6BE00" : commissionRate > 0 ? "#FFF0A0" : "#f0f0f0", borderRadius: 99, padding: "3px 10px", fontSize: 13, fontWeight: 700, color: "#111" }}>{commissionRate}%歩合</div>
             </div>
             <div style={{ fontSize: 32, fontWeight: 800, marginBottom: 4 }}>¥{fmt(estimatedSalary)}</div>
             <div style={{ fontSize: 11, color: "#bbb", marginBottom: 12 }}>¥{fmt(total)} × {commissionRate}%</div>
-            {target61 ? (
-              total >= target61 ? (
-                <div style={{ background: "#F6BE00", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
-                  <div style={{ fontSize: 15, fontWeight: 800 }}>🎉 {commission.maxRate}%達成！</div>
-                </div>
-              ) : total >= commission.midThreshold ? (
+            {sortedTiers.length === 0 ? (
+              <div style={{ fontSize: 12, color: "#ccc" }}>設定タブで歩合率を設定してください</div>
+            ) : (() => {
+              const next = sortedTiers.find(t => total < (t.threshold || 0));
+              if (!next) {
+                return (
+                  <div style={{ background: "#F6BE00", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
+                    <div style={{ fontSize: 15, fontWeight: 800 }}>🎉 最高{topRateTier.rate}%達成！</div>
+                  </div>
+                );
+              }
+              return (
                 <div style={{ background: "#f5f5f5", borderRadius: 10, padding: "12px 14px" }}>
-                  <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>{commission.maxRate}%達成まであと（税込）</div>
-                  <div style={{ fontSize: 22, fontWeight: 700 }}>¥{fmt(toTaxInc(target61 - total))}</div>
-                  <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>目標（税込）¥{fmt(toTaxInc(target61))}　達成時給料 ¥{fmt(Math.round(target61 * commission.maxRate / 100))}</div>
+                  <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>次の {next.rate}% まであと（税込）</div>
+                  <div style={{ fontSize: 22, fontWeight: 700 }}>¥{fmt(toTaxInc((next.threshold || 0) - total))}</div>
+                  <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>境界（税込）¥{fmt(toTaxInc(next.threshold || 0))}　達成時給料 ¥{fmt(Math.round((next.threshold || 0) * (next.rate || 0) / 100))}</div>
                 </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ background: "#f5f5f5", borderRadius: 10, padding: "12px 14px" }}>
-                    <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>{commission.midRate}%まであと（税込）</div>
-                    <div style={{ fontSize: 20, fontWeight: 700 }}>¥{fmt(toTaxInc(commission.midThreshold - total))}</div>
-                    <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>基準営収（税込）¥{fmt(toTaxInc(commission.midThreshold))}</div>
-                  </div>
-                  <div style={{ background: "#f5f5f5", borderRadius: 10, padding: "12px 14px" }}>
-                    <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>{commission.maxRate}%まであと（税込）</div>
-                    <div style={{ fontSize: 20, fontWeight: 700 }}>¥{fmt(toTaxInc(target61 - total))}</div>
-                    <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>目標（税込）¥{fmt(toTaxInc(target61))}　達成時給料 ¥{fmt(Math.round(target61 * commission.maxRate / 100))}</div>
-                  </div>
-                </div>
-              )
-            ) : (
-              <div style={{ fontSize: 12, color: "#ccc" }}>出番表で出勤・有給を登録すると{commission.maxRate}%目標が表示されます</div>
-            )}
+              );
+            })()}
           </div>
 
           {/* 歩合率のしくみ */}
           <div style={card}>
             <div style={{ ...lbl, marginBottom: 4 }}>歩合率のしくみ</div>
-            <div style={{ fontSize: 11, color: "#ccc", marginBottom: 12 }}>営収に応じて{commission.minRate}〜{commission.maxRate}%の間で線形に変動</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {rate50 && (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#f5f5f5", borderRadius: 10 }}>
-                  <div>
-                    <div style={{ fontSize: 12, color: "#aaa" }}>{commission.minRate}%保証ライン（税込）</div>
-                    <div style={{ fontSize: 12, color: "#bbb" }}>¥{fmt(toTaxInc(rate50))}以上で{commission.minRate}%</div>
-                  </div>
-                  <span style={{ fontSize: 16, fontWeight: 800 }}>{commission.minRate}%</span>
-                </div>
-              )}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#f5f5f5", borderRadius: 10 }}>
-                <div>
-                  <div style={{ fontSize: 12, color: "#aaa" }}>基準（税込）</div>
-                  <div style={{ fontSize: 12, color: "#bbb" }}>¥{fmt(toTaxInc(commission.midThreshold))}</div>
-                </div>
-                <span style={{ fontSize: 16, fontWeight: 800 }}>{commission.midRate}%</span>
+            <div style={{ fontSize: 11, color: "#ccc", marginBottom: 12 }}>営収が境界を超えると次の歩合に切り替わります</div>
+            {sortedTiers.length === 0 ? (
+              <div style={{ fontSize: 12, color: "#ccc", textAlign: "center", padding: "12px 0" }}>設定タブで歩合率を追加してください</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {sortedTiers.map((t, i) => {
+                  const isTop = i === sortedTiers.length - 1;
+                  const isCurrent = commissionRate === (t.rate || 0);
+                  return (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: isTop ? "#FFF8E0" : "#f5f5f5", borderRadius: 10, border: isTop ? "1px solid #F6BE00" : isCurrent ? "1px solid #3399ff" : "none" }}>
+                      <div>
+                        <div style={{ fontSize: 12, color: "#aaa" }}>境界 営収（税込）</div>
+                        <div style={{ fontSize: 12, color: "#bbb" }}>¥{fmt(toTaxInc(t.threshold || 0))}以上</div>
+                      </div>
+                      <span style={{ fontSize: 16, fontWeight: 800, color: isTop ? "#c8900a" : "#111" }}>{t.rate}%</span>
+                    </div>
+                  );
+                })}
               </div>
-              {target61 && (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#FFF8E0", borderRadius: 10, border: "1px solid #F6BE00" }}>
-                  <div>
-                    <div style={{ fontSize: 12, color: "#aaa" }}>{commission.maxRate}%目標（税込）{commission.customTarget ? "" : `・出勤${periodAtt.work}日有給${periodAtt.paid}日`}</div>
-                    <div style={{ fontSize: 12, color: "#bbb" }}>¥{fmt(toTaxInc(target61))}</div>
-                  </div>
-                  <span style={{ fontSize: 16, fontWeight: 800, color: "#c8900a" }}>{commission.maxRate}%</span>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         </>}
 
@@ -667,7 +640,7 @@ export default function TaxiSalesApp() {
                 <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800 }}>{periodAtt.work}</div><div style={{ fontSize: 10, color: "#999" }}>出勤</div></div>
                 <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#4a90d9" }}>{periodAtt.paid}</div><div style={{ fontSize: 10, color: "#999" }}>有給</div></div>
                 <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#e55" }}>{periodAtt.absent}</div><div style={{ fontSize: 10, color: "#999" }}>欠勤</div></div>
-                {target61 && <div style={{ marginLeft: "auto", textAlign: "right" }}><div style={{ fontSize: 11, color: "#bbb" }}>{commission.maxRate}%目標営収（税込）</div><div style={{ fontSize: 14, fontWeight: 700 }}>¥{fmt(toTaxInc(target61))}</div></div>}
+                {topRateTier && targetTop > 0 && <div style={{ marginLeft: "auto", textAlign: "right" }}><div style={{ fontSize: 11, color: "#bbb" }}>{topRateTier.rate}%目標営収（税込）</div><div style={{ fontSize: 14, fontWeight: 700 }}>¥{fmt(toTaxInc(targetTop))}</div></div>}
               </div>
             </div>
           )}
@@ -762,84 +735,50 @@ export default function TaxiSalesApp() {
 }
 
 function CommissionPanel({ commission, saveCommission }) {
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState(commission);
-  useEffect(() => { setForm(commission); }, [commission]);
-  const num = (v, def) => { const n = parseFloat(v); return isNaN(n) ? def : n; };
-  if (!editing) {
-    return (
-      <>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-          <div style={{ padding: "10px 12px", background: "#f5f5f5", borderRadius: 8 }}>
-            <div style={{ fontSize: 10, color: "#999" }}>下限歩合</div>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>{commission.minRate}%</div>
-          </div>
-          <div style={{ padding: "10px 12px", background: "#f5f5f5", borderRadius: 8 }}>
-            <div style={{ fontSize: 10, color: "#999" }}>中段歩合</div>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>{commission.midRate}%</div>
-          </div>
-          <div style={{ padding: "10px 12px", background: "#f5f5f5", borderRadius: 8 }}>
-            <div style={{ fontSize: 10, color: "#999" }}>上限歩合</div>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>{commission.maxRate}%</div>
-          </div>
-          <div style={{ padding: "10px 12px", background: "#f5f5f5", borderRadius: 8 }}>
-            <div style={{ fontSize: 10, color: "#999" }}>中段境界(税抜)</div>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>¥{commission.midThreshold.toLocaleString()}</div>
-          </div>
-          <div style={{ gridColumn: "1/-1", padding: "10px 12px", background: "#f5f5f5", borderRadius: 8 }}>
-            <div style={{ fontSize: 10, color: "#999" }}>上限ターゲット営収(税抜)</div>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>{commission.customTarget && commission.customTarget > 0 ? `¥${commission.customTarget.toLocaleString()}` : "出勤テーブル自動算出"}</div>
-          </div>
-        </div>
-        <button onClick={() => setEditing(true)} style={{ ...primaryBtn, width: "100%", padding: "13px" }}>編集する</button>
-      </>
-    );
-  }
+  const initial = commission?.tiers?.length ? commission.tiers : [];
+  const [tiers, setTiers] = useState(initial);
+  useEffect(() => { setTiers(commission?.tiers || []); }, [commission?.tiers]);
+  const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+  const updateRow = (i, patch) => setTiers(prev => prev.map((t, idx) => idx === i ? { ...t, ...patch } : t));
+  const removeRow = (i) => setTiers(prev => prev.filter((_, idx) => idx !== i));
+  const addRow = () => setTiers(prev => [...prev, { threshold: 0, rate: 0 }]);
+  const onSave = () => {
+    const cleaned = tiers
+      .map(t => ({ threshold: Math.max(0, Math.round(num(t.threshold))), rate: Math.max(0, Math.min(100, num(t.rate))) }))
+      .sort((a, b) => a.threshold - b.threshold);
+    saveCommission({ tiers: cleaned });
+  };
+  const dirty = JSON.stringify(tiers) !== JSON.stringify(commission?.tiers || []);
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
-        <Field label="下限歩合 (%)">
-          <input type="number" step="0.01" value={form.minRate} onChange={e => setForm({ ...form, minRate: e.target.value })} style={inputStyle} />
-        </Field>
-        <Field label="中段歩合 (%)">
-          <input type="number" step="0.01" value={form.midRate} onChange={e => setForm({ ...form, midRate: e.target.value })} style={inputStyle} />
-        </Field>
-        <Field label="上限歩合 (%)">
-          <input type="number" step="0.01" value={form.maxRate} onChange={e => setForm({ ...form, maxRate: e.target.value })} style={inputStyle} />
-        </Field>
-        <Field label="中段境界の営収 (税抜・円)">
-          <input type="number" value={form.midThreshold} onChange={e => setForm({ ...form, midThreshold: e.target.value })} style={inputStyle} />
-        </Field>
-        <Field label="上限ターゲット営収 (税抜・円、空欄で自動)">
-          <input type="number" placeholder="空欄=出勤テーブル使用" value={form.customTarget ?? ""} onChange={e => setForm({ ...form, customTarget: e.target.value })} style={inputStyle} />
-        </Field>
+      <div style={{ fontSize: 11, color: "#999", marginBottom: 10, lineHeight: 1.7 }}>
+        境界の営収（税抜・円）と、その金額に達した時の歩合（%）を1行ずつ追加してください。<br />
+        例: ¥0以上で50%、¥584,091以上で56.74%、¥627,110以上で61% など。何段階でも作れます。
       </div>
+      {tiers.length === 0 ? (
+        <div style={{ fontSize: 12, color: "#ccc", textAlign: "center", padding: "16px 0" }}>歩合がまだ登録されていません</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 32px", gap: 6, fontSize: 10, color: "#999", padding: "0 4px" }}>
+            <div>境界 営収（税抜・円）</div>
+            <div style={{ textAlign: "right" }}>歩合 (%)</div>
+            <div></div>
+          </div>
+          {tiers.map((t, i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 80px 32px", gap: 6, alignItems: "center" }}>
+              <input type="number" value={t.threshold} onChange={e => updateRow(i, { threshold: e.target.value })} style={{ ...inputStyle, padding: "8px 10px", boxSizing: "border-box" }} />
+              <input type="number" step="0.01" value={t.rate} onChange={e => updateRow(i, { rate: e.target.value })} style={{ ...inputStyle, padding: "8px", boxSizing: "border-box", textAlign: "right" }} />
+              <button onClick={() => removeRow(i)} style={{ background: "transparent", border: "none", color: "#e55", fontSize: 18, cursor: "pointer", padding: 0 }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <button onClick={addRow} style={{ ...ghostBtn, width: "100%", padding: "10px", marginBottom: 8 }}>+ 段階を追加</button>
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => {
-          const ct = String(form.customTarget ?? "").trim();
-          const next = {
-            minRate: num(form.minRate, DEFAULT_COMMISSION.minRate),
-            midRate: num(form.midRate, DEFAULT_COMMISSION.midRate),
-            maxRate: num(form.maxRate, DEFAULT_COMMISSION.maxRate),
-            midThreshold: Math.round(num(form.midThreshold, DEFAULT_COMMISSION.midThreshold)),
-            customTarget: ct === "" ? null : Math.round(num(ct, 0)) || null,
-          };
-          saveCommission(next);
-          setEditing(false);
-        }} style={{ ...primaryBtn, flex: 1, padding: "13px" }}>保存</button>
-        <button onClick={() => { setForm(commission); setEditing(false); }} style={{ ...ghostBtn, flex: 1, padding: "13px" }}>キャンセル</button>
+        <button onClick={onSave} disabled={!dirty} style={{ ...primaryBtn, flex: 1, padding: "13px", opacity: dirty ? 1 : 0.4 }}>保存</button>
+        <button onClick={() => setTiers(commission?.tiers || [])} disabled={!dirty} style={{ ...ghostBtn, flex: 1, padding: "13px", opacity: dirty ? 1 : 0.4 }}>取消</button>
       </div>
-      <button onClick={() => { setForm(DEFAULT_COMMISSION); }} style={{ ...ghostBtn, width: "100%", padding: "10px", marginTop: 8, fontSize: 12 }}>初期値に戻す（保存前）</button>
     </>
-  );
-}
-
-function Field({ label, children }) {
-  return (
-    <div>
-      <div style={{ fontSize: 11, color: "#999", marginBottom: 4, fontWeight: 600 }}>{label}</div>
-      {children}
-    </div>
   );
 }
 
