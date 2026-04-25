@@ -6,8 +6,8 @@ const LazyChart = lazy(() => import("./SalesChart"));
 const STORAGE_KEY = "taxi_sales_data_v3";
 
 const DEFAULT_COMMISSION = {
-  tiers: [], // [{ threshold: number(税抜), rate: number(%)}]
-  attendanceTable: [], // [{ work, paid, absent, target }] — 一致した行があれば最高歩合の境界を target に置き換え
+  tiers: [], // [{ threshold: number(税込), rate: number(%)}]
+  attendanceTable: [], // [{ work, paid, absent, target }] — 一致した行があれば最高歩合の足切りを target に置き換え
 };
 
 function applyAttendanceAdjust(tiers, periodAtt, conf) {
@@ -317,7 +317,7 @@ export default function TaxiSalesApp() {
   const saveGoal = useCallback(() => { const g = parseInt(goalInput.replace(/,/g, "")); if (!g || isNaN(g)) return; updPeriod({ ...pData, goal: g }); setGoalInput(""); setEditingGoal(false); }, [goalInput, pData, updPeriod]);
   const autoSetGoalTop = useCallback(() => {
     if (!targetTop) return;
-    const newGoal = toTaxInc(targetTop);
+    const newGoal = targetTop;
     setData(p => ({
       ...p,
       periods: {
@@ -610,8 +610,8 @@ export default function TaxiSalesApp() {
               return (
                 <div style={{ background: "#f5f5f5", borderRadius: 10, padding: "12px 14px" }}>
                   <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>次の {next.rate}% まであと（税込）</div>
-                  <div style={{ fontSize: 22, fontWeight: 700 }}>¥{fmt(toTaxInc((next.threshold || 0) - total))}</div>
-                  <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>境界（税込）¥{fmt(toTaxInc(next.threshold || 0))}　達成時給料 ¥{fmt(Math.round((next.threshold || 0) * (next.rate || 0) / 100))}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700 }}>¥{fmt((next.threshold || 0) - total)}</div>
+                  <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>足切り（税込）¥{fmt(next.threshold || 0)}　達成時給料 ¥{fmt(Math.round((next.threshold || 0) * (next.rate || 0) / 100))}</div>
                 </div>
               );
             })()}
@@ -620,7 +620,7 @@ export default function TaxiSalesApp() {
           {/* 歩合率のしくみ */}
           <div style={card}>
             <div style={{ ...lbl, marginBottom: 4 }}>歩合率のしくみ</div>
-            <div style={{ fontSize: 11, color: "#ccc", marginBottom: 12 }}>営収が境界を超えると次の歩合に切り替わります</div>
+            <div style={{ fontSize: 11, color: "#ccc", marginBottom: 12 }}>営収が足切りを超えると次の歩合に切り替わります</div>
             {sortedTiers.length === 0 ? (
               <div style={{ fontSize: 12, color: "#ccc", textAlign: "center", padding: "12px 0" }}>設定タブで歩合率を追加してください</div>
             ) : (
@@ -631,8 +631,8 @@ export default function TaxiSalesApp() {
                   return (
                     <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: isTop ? "#FFF8E0" : "#f5f5f5", borderRadius: 10, border: isTop ? "1px solid #F6BE00" : isCurrent ? "1px solid #3399ff" : "none" }}>
                       <div>
-                        <div style={{ fontSize: 12, color: "#aaa" }}>境界 営収（税込）</div>
-                        <div style={{ fontSize: 12, color: "#bbb" }}>¥{fmt(toTaxInc(t.threshold || 0))}以上</div>
+                        <div style={{ fontSize: 12, color: "#aaa" }}>足切り（税込）</div>
+                        <div style={{ fontSize: 12, color: "#bbb" }}>¥{fmt(t.threshold || 0)}以上</div>
                       </div>
                       <span style={{ fontSize: 16, fontWeight: 800, color: isTop ? "#c8900a" : "#111" }}>{t.rate}%</span>
                     </div>
@@ -663,7 +663,7 @@ export default function TaxiSalesApp() {
                 <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800 }}>{periodAtt.work}</div><div style={{ fontSize: 10, color: "#999" }}>出勤</div></div>
                 <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#4a90d9" }}>{periodAtt.paid}</div><div style={{ fontSize: 10, color: "#999" }}>有給</div></div>
                 <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#e55" }}>{periodAtt.absent}</div><div style={{ fontSize: 10, color: "#999" }}>欠勤</div></div>
-                {topRateTier && targetTop > 0 && <div style={{ marginLeft: "auto", textAlign: "right" }}><div style={{ fontSize: 11, color: "#bbb" }}>{topRateTier.rate}%目標営収（税込）</div><div style={{ fontSize: 14, fontWeight: 700 }}>¥{fmt(toTaxInc(targetTop))}</div></div>}
+                {topRateTier && targetTop > 0 && <div style={{ marginLeft: "auto", textAlign: "right" }}><div style={{ fontSize: 11, color: "#bbb" }}>{topRateTier.rate}%足切り（税込）</div><div style={{ fontSize: 14, fontWeight: 700 }}>¥{fmt(targetTop)}</div></div>}
               </div>
             </div>
           )}
@@ -808,11 +808,11 @@ function AttendanceTablePanel({ commission, periodAtt, saveAttendanceTable }) {
   return (
     <>
       <div style={{ fontSize: 11, color: "#999", marginBottom: 10, lineHeight: 1.7 }}>
-        出勤数・有休数・欠勤数の組み合わせごとに、最高歩合（{baseTop.rate}%）の境界営収（税抜）を入力できます。今期の出勤状況と一致した行があれば、その値が自動で反映されます。
+        出勤数・有休数・欠勤数の組み合わせごとに、最高歩合（{baseTop.rate}%）の足切り（税込）を入力できます。今期の出勤状況と一致した行があれば、その値が自動で反映されます。
       </div>
       {rows.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1.6fr 32px", gap: 6, fontSize: 10, color: "#999", padding: "0 4px", marginBottom: 4 }}>
-          <div>出勤</div><div>有休</div><div>欠勤</div><div style={{ textAlign: "right" }}>営収（税抜・円）</div><div></div>
+          <div>出勤</div><div>有休</div><div>欠勤</div><div style={{ textAlign: "right" }}>足切り（税込・円）</div><div></div>
         </div>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
@@ -862,15 +862,15 @@ function CommissionPanel({ commission, saveCommission }) {
   return (
     <>
       <div style={{ fontSize: 11, color: "#999", marginBottom: 10, lineHeight: 1.7 }}>
-        境界の営収（税抜・円）と、その金額に達した時の歩合（%）を1行ずつ追加してください。<br />
-        営収がその境界以上になると、対応する歩合に切り替わります。何段階でも作れます。
+        足切り（税込・円）と、その金額に達した時の歩合（%）を1行ずつ追加してください。<br />
+        営収が足切り以上になると、対応する歩合に切り替わります。何段階でも作れます。
       </div>
       {tiers.length === 0 ? (
         <div style={{ fontSize: 12, color: "#ccc", textAlign: "center", padding: "16px 0" }}>歩合がまだ登録されていません</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 32px", gap: 6, fontSize: 10, color: "#999", padding: "0 4px" }}>
-            <div>境界 営収（税抜・円）</div>
+            <div>足切り（税込・円）</div>
             <div style={{ textAlign: "right" }}>歩合 (%)</div>
             <div></div>
           </div>
