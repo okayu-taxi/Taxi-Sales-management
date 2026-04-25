@@ -15,27 +15,31 @@ const TARGET_61 = {
 };
 
 const DEFAULT_COMMISSION = {
-  minRate: 50,
-  midRate: 56.74,
-  maxRate: 61,
-  midThreshold: 584091, // 中段歩合の境界営収（税抜）
-  customTarget: null,    // 上限歩合のターゲット営収（税抜） null=出勤テーブル使用
+  minRate: 0,
+  midRate: 0,
+  maxRate: 0,
+  midThreshold: 0,    // 中段歩合の境界営収（税抜）
+  customTarget: null, // 上限歩合のターゲット営収（税抜） null=出勤テーブル使用
 };
 
 function getCommissionRate(revenue, t61, conf = DEFAULT_COMMISSION) {
   const { minRate, midRate, maxRate, midThreshold } = conf;
-  if (!t61) {
-    if (revenue >= midThreshold) return midRate;
+  if (!t61 || t61 === midThreshold) {
+    if (midThreshold > 0 && revenue >= midThreshold) return midRate;
     return minRate;
   }
   const slope = (maxRate - midRate) / (t61 - midThreshold);
   const rate = midRate + slope * (revenue - midThreshold);
-  return Math.max(minRate, Math.min(maxRate, parseFloat(rate.toFixed(2))));
+  const lo = Math.min(minRate, maxRate);
+  const hi = Math.max(minRate, maxRate);
+  return Math.max(lo, Math.min(hi, parseFloat(rate.toFixed(2))));
 }
 function calc50Threshold(t61, conf = DEFAULT_COMMISSION) {
   if (!t61) return null;
   const { minRate, midRate, maxRate, midThreshold } = conf;
+  if (maxRate === midRate || t61 === midThreshold) return null;
   const slope = (maxRate - midRate) / (t61 - midThreshold);
+  if (slope === 0) return null;
   return Math.round(midThreshold - (midRate - minRate) / slope);
 }
 function toTaxInc(amount) {
