@@ -682,33 +682,37 @@ export default function TaxiSalesApp() {
         </>}
 
         {activeTab === "settings" && (
-          <div style={card}>
-            <div style={{ ...lbl, marginBottom: 16 }}>締日設定</div>
-            <div style={{ padding: "14px", background: "#f5f5f5", borderRadius: 10, marginBottom: 16 }}>
-              <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>現在の設定</div>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>{closingLabel}</div>
-              {closingDay !== 0 && <div style={{ fontSize: 12, color: "#bbb", marginTop: 6 }}>前月{closingDay+1}日〜今月{closingDay}日が1期間</div>}
+          <>
+            <div style={card}>
+              <div style={{ ...lbl, marginBottom: 16 }}>締日設定</div>
+              <div style={{ padding: "14px", background: "#f5f5f5", borderRadius: 10, marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>現在の設定</div>
+                <div style={{ fontSize: 22, fontWeight: 700 }}>{closingLabel}</div>
+                {closingDay !== 0 && <div style={{ fontSize: 12, color: "#bbb", marginTop: 6 }}>前月{closingDay+1}日〜今月{closingDay}日が1期間</div>}
+              </div>
+              {!editingClosing ? (
+                <button onClick={() => setEditingClosing(true)} style={{ ...primaryBtn, width: "100%", padding: "13px" }}>締日を変更する</button>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, color: "#999", marginBottom: 10, lineHeight: 1.7 }}>締日を入力（1〜28）<br /><span style={{ color: "#ccc" }}>末日締めは「0」を入力</span></div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
+                    <input type="number" placeholder="例：20" min={0} max={28} value={closingInput} onChange={e => setClosingInput(e.target.value)} style={inputStyle} onKeyDown={e => e.key === "Enter" && saveClosing()} />
+                    <span style={{ color: "#999", fontSize: 14 }}>日</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={saveClosing} style={{ ...primaryBtn, flex: 1, padding: "13px" }}>保存</button>
+                    <button onClick={() => { setEditingClosing(false); setClosingInput(""); }} style={{ ...ghostBtn, flex: 1, padding: "13px" }}>キャンセル</button>
+                  </div>
+                </>
+              )}
             </div>
-            {!editingClosing ? (
-              <button onClick={() => setEditingClosing(true)} style={{ ...primaryBtn, width: "100%", padding: "13px" }}>締日を変更する</button>
-            ) : (
-              <>
-                <div style={{ fontSize: 12, color: "#999", marginBottom: 10, lineHeight: 1.7 }}>締日を入力（1〜28）<br /><span style={{ color: "#ccc" }}>末日締めは「0」を入力</span></div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
-                  <input type="number" placeholder="例：20" min={0} max={28} value={closingInput} onChange={e => setClosingInput(e.target.value)} style={inputStyle} onKeyDown={e => e.key === "Enter" && saveClosing()} />
-                  <span style={{ color: "#999", fontSize: 14 }}>日</span>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={saveClosing} style={{ ...primaryBtn, flex: 1, padding: "13px" }}>保存</button>
-                  <button onClick={() => { setEditingClosing(false); setClosingInput(""); }} style={{ ...ghostBtn, flex: 1, padding: "13px" }}>キャンセル</button>
-                </div>
-              </>
-            )}
-            <div style={{ marginTop: 20 }}>
+
+            <div style={card}>
               <div style={{ ...lbl, marginBottom: 12 }}>クラウド同期 (GitHub Gist)</div>
               <GistSyncPanel pat={pat} gistId={gistId} status={syncStatus} setupSync={setupSync} disconnectSync={disconnectSync} manualSync={manualSync} />
             </div>
-            <div style={{ marginTop: 20 }}>
+
+            <div style={card}>
               <div style={{ ...lbl, marginBottom: 12 }}>アプリ更新</div>
               <button onClick={async () => {
                 try {
@@ -725,7 +729,7 @@ export default function TaxiSalesApp() {
               }} style={{ ...primaryBtn, width: "100%", padding: "13px" }}>最新版に更新する</button>
               <div style={{ fontSize: 11, color: "#ccc", marginTop: 10, lineHeight: 1.7 }}>キャッシュとService Workerを破棄してから再読み込みします。</div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>
