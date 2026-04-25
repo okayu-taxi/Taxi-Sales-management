@@ -111,6 +111,7 @@ export default function TaxiSalesApp() {
   const [inputAmount, setInputAmount] = useState("");
   const [inputToll, setInputToll] = useState("");
   const [inputDateKey, setInputDateKey] = useState("");
+  const [inputTollDateKey, setInputTollDateKey] = useState("");
   const [goalInput, setGoalInput] = useState("");
   const [editingGoal, setEditingGoal] = useState(false);
   const [editingClosing, setEditingClosing] = useState(false);
@@ -145,7 +146,7 @@ export default function TaxiSalesApp() {
   useEffect(() => {
     const tin = datesInPeriod.find(d => d.year === today.year && d.month === today.month && d.day === today.day);
     const def = tin || datesInPeriod[0];
-    if (def) setInputDateKey(`${def.year}-${def.month}-${def.day}`);
+    if (def) { const k = `${def.year}-${def.month}-${def.day}`; setInputDateKey(k); setInputTollDateKey(k); }
   }, [pKey]);
 
   const isFirstSaveRef = useRef(true);
@@ -381,11 +382,11 @@ export default function TaxiSalesApp() {
     if (tStr === "") return;
     const t = parseInt(tStr);
     if (isNaN(t) || t < 0) return;
-    const cur = pData.days[inputDateKey];
+    const cur = pData.days[inputTollDateKey];
     const next = cur ? { ...cur, toll: t } : { toll: t };
-    updPeriod({ ...pData, days: { ...pData.days, [inputDateKey]: next } });
+    updPeriod({ ...pData, days: { ...pData.days, [inputTollDateKey]: next } });
     setInputToll("");
-  }, [inputToll, inputDateKey, pData, updPeriod]);
+  }, [inputToll, inputTollDateKey, pData, updPeriod]);
   const saveGoal = useCallback(() => { const g = parseInt(goalInput.replace(/,/g, "")); if (!g || isNaN(g)) return; updPeriod({ ...pData, goal: g }); setGoalInput(""); setEditingGoal(false); }, [goalInput, pData, updPeriod]);
   const autoSetGoal61 = useCallback(() => {
     if (!target61) return;
@@ -464,7 +465,6 @@ export default function TaxiSalesApp() {
     setInputDateKey(dateKey);
     const existing = pData.days[dateKey];
     setInputAmount(existing?.sales != null ? String(existing.sales) : "");
-    setInputToll(existing?.toll ? String(existing.toll) : "");
     if (typeof window !== "undefined") {
       window.requestAnimationFrame(() => {
         const el = document.getElementById("sales-input-card");
@@ -586,7 +586,7 @@ export default function TaxiSalesApp() {
               )}
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
-              <select value={inputDateKey} onChange={e => { setInputDateKey(e.target.value); const v = pData.days[e.target.value]; setInputAmount(v?.sales != null ? String(v.sales) : ""); setInputToll(v?.toll ? String(v.toll) : ""); }} style={{ ...inputStyle, width: 116, flex: "none", padding: "8px", fontSize: 13, boxSizing: "border-box" }}>
+              <select value={inputDateKey} onChange={e => { setInputDateKey(e.target.value); const v = pData.days[e.target.value]; setInputAmount(v?.sales != null ? String(v.sales) : ""); }} style={{ ...inputStyle, width: 116, flex: "none", padding: "8px", fontSize: 13, boxSizing: "border-box" }}>
                 {datesInPeriod.map(d => { const k = `${d.year}-${d.month}-${d.day}`; const w = WEEKDAYS[new Date(d.year, d.month, d.day).getDay()]; return <option key={k} value={k}>{d.month+1}月{d.day}日({w})</option>; })}
               </select>
               <input type="number" placeholder="売上（円）" value={inputAmount} onChange={e => setInputAmount(e.target.value)} style={{ ...inputStyle, padding: "8px 10px", minWidth: 0, boxSizing: "border-box" }} onKeyDown={e => e.key === "Enter" && saveSales()} />
@@ -601,13 +601,16 @@ export default function TaxiSalesApp() {
           <div style={{ ...card, padding: "10px 12px", marginBottom: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <span style={{ ...lbl, fontSize: 9 }}>自腹高速を入力</span>
-              <span style={{ fontSize: 10, color: "#bbb" }}>
-                {(() => { const [y,m,d] = inputDateKey.split("-").map(Number); if (!y) return ""; const w = WEEKDAYS[new Date(y, m, d).getDay()]; return `${m+1}月${d}日(${w})`; })()}
-              </span>
+              {pData.days[inputTollDateKey]?.toll ? (
+                <span style={{ fontSize: 10, color: "#3399ff", fontWeight: 700 }}>編集中</span>
+              ) : null}
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "stretch", marginBottom: 8 }}>
+              <select value={inputTollDateKey} onChange={e => { setInputTollDateKey(e.target.value); const v = pData.days[e.target.value]; setInputToll(v?.toll ? String(v.toll) : ""); }} style={{ ...inputStyle, width: 116, flex: "none", padding: "8px", fontSize: 13, boxSizing: "border-box" }}>
+                {datesInPeriod.map(d => { const k = `${d.year}-${d.month}-${d.day}`; const w = WEEKDAYS[new Date(d.year, d.month, d.day).getDay()]; return <option key={k} value={k}>{d.month+1}月{d.day}日({w})</option>; })}
+              </select>
               <input type="number" placeholder="自腹高速（円）" value={inputToll} onChange={e => setInputToll(e.target.value)} style={{ ...inputStyle, padding: "8px 10px", minWidth: 0, boxSizing: "border-box" }} onKeyDown={e => e.key === "Enter" && saveToll()} />
-              <button onClick={saveToll} style={{ ...primaryBtn, padding: "8px 14px", flex: "none", whiteSpace: "nowrap" }}>{pData.days[inputDateKey]?.toll ? "更新" : "記録"}</button>
+              <button onClick={saveToll} style={{ ...primaryBtn, padding: "8px 14px", flex: "none", whiteSpace: "nowrap" }}>{pData.days[inputTollDateKey]?.toll ? "更新" : "記録"}</button>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "6px 10px", background: "#fafafa", borderRadius: 8 }}>
               <span style={{ fontSize: 11, color: "#999", fontWeight: 600 }}>今期の自腹高速 合計</span>
