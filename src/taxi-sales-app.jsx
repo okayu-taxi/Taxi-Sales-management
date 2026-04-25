@@ -706,33 +706,35 @@ export default function TaxiSalesApp() {
               <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 18, height: 18, border: "2px solid #999", borderRadius: 5 }} />今日</div>
             </div>
           </div>
+
+          {/* 締日設定 */}
+          <div style={card}>
+            <div style={{ ...lbl, marginBottom: 16 }}>締日設定</div>
+            <div style={{ padding: "14px", background: "#f5f5f5", borderRadius: 10, marginBottom: 16 }}>
+              <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>現在の設定</div>
+              <div style={{ fontSize: 22, fontWeight: 700 }}>{closingLabel}</div>
+              {closingDay !== 0 && <div style={{ fontSize: 12, color: "#bbb", marginTop: 6 }}>前月{closingDay+1}日〜今月{closingDay}日が1期間</div>}
+            </div>
+            {!editingClosing ? (
+              <button onClick={() => setEditingClosing(true)} style={{ ...primaryBtn, width: "100%", padding: "13px" }}>締日を変更する</button>
+            ) : (
+              <>
+                <div style={{ fontSize: 12, color: "#999", marginBottom: 10, lineHeight: 1.7 }}>締日を入力（1〜28）<br /><span style={{ color: "#ccc" }}>末日締めは「0」を入力</span></div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
+                  <input type="number" placeholder="例：20" min={0} max={28} value={closingInput} onChange={e => setClosingInput(e.target.value)} style={inputStyle} onKeyDown={e => e.key === "Enter" && saveClosing()} />
+                  <span style={{ color: "#999", fontSize: 14 }}>日</span>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={saveClosing} style={{ ...primaryBtn, flex: 1, padding: "13px" }}>保存</button>
+                  <button onClick={() => { setEditingClosing(false); setClosingInput(""); }} style={{ ...ghostBtn, flex: 1, padding: "13px" }}>キャンセル</button>
+                </div>
+              </>
+            )}
+          </div>
         </div>}
 
         {visitedTabs.has("settings") && (
           <div style={{ display: activeTab === "settings" ? "block" : "none" }}>
-            <div style={card}>
-              <div style={{ ...lbl, marginBottom: 16 }}>締日設定</div>
-              <div style={{ padding: "14px", background: "#f5f5f5", borderRadius: 10, marginBottom: 16 }}>
-                <div style={{ fontSize: 11, color: "#bbb", marginBottom: 4 }}>現在の設定</div>
-                <div style={{ fontSize: 22, fontWeight: 700 }}>{closingLabel}</div>
-                {closingDay !== 0 && <div style={{ fontSize: 12, color: "#bbb", marginTop: 6 }}>前月{closingDay+1}日〜今月{closingDay}日が1期間</div>}
-              </div>
-              {!editingClosing ? (
-                <button onClick={() => setEditingClosing(true)} style={{ ...primaryBtn, width: "100%", padding: "13px" }}>締日を変更する</button>
-              ) : (
-                <>
-                  <div style={{ fontSize: 12, color: "#999", marginBottom: 10, lineHeight: 1.7 }}>締日を入力（1〜28）<br /><span style={{ color: "#ccc" }}>末日締めは「0」を入力</span></div>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
-                    <input type="number" placeholder="例：20" min={0} max={28} value={closingInput} onChange={e => setClosingInput(e.target.value)} style={inputStyle} onKeyDown={e => e.key === "Enter" && saveClosing()} />
-                    <span style={{ color: "#999", fontSize: 14 }}>日</span>
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={saveClosing} style={{ ...primaryBtn, flex: 1, padding: "13px" }}>保存</button>
-                    <button onClick={() => { setEditingClosing(false); setClosingInput(""); }} style={{ ...ghostBtn, flex: 1, padding: "13px" }}>キャンセル</button>
-                  </div>
-                </>
-              )}
-            </div>
 
             <div style={card}>
               <div style={{ ...lbl, marginBottom: 12 }}>クラウド同期 (GitHub Gist)</div>
