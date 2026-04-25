@@ -333,10 +333,8 @@ export default function TaxiSalesApp() {
             <div style={statCard}>
               <div style={statTitle}>目標まで残り</div>
               <div style={statValue}>¥{fmt(remaining)}</div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 4 }}>
-                <span style={{ fontSize: 10, color: "#999" }}>目標までの1日平均</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#333" }}>¥{fmt(dailyNeeded)}</span>
-              </div>
+              <div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>目標までの1日平均</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#333" }}>¥{fmt(dailyNeeded)}</div>
             </div>
             <div style={statCard}>
               <div style={statTitle}>現在の総営収</div>
