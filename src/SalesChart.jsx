@@ -34,9 +34,6 @@ export default function SalesChart({ chartData, fmt, onPointClick, todayIndex })
         fontSize={10}
         fontWeight={600}
         fill="#555"
-        stroke="#fff"
-        strokeWidth={3}
-        paintOrder="stroke"
         style={{ pointerEvents: "none" }}
       >
         {fmt(value)}
