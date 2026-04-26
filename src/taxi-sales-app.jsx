@@ -827,10 +827,10 @@ export default function TaxiSalesApp() {
               </div>
             </div>
             <div style={{ display: "flex", gap: 12, marginTop: 16, paddingTop: 14, borderTop: "1px solid #f0f0f0", justifyContent: "center", flexWrap: "wrap" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 18, height: 18, background: "#111", borderRadius: 5 }} />出勤</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 18, height: 18, background: "#4a90d9", borderRadius: 5 }} />有給</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 18, height: 18, background: "#e55", borderRadius: 5 }} />欠勤</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 18, height: 18, border: "2px solid #999", borderRadius: 5 }} />今日</div>
+              <div style={{ fontSize: 11, color: "#111", fontWeight: 700 }}>出勤</div>
+              <div style={{ fontSize: 11, color: "#4a90d9", fontWeight: 700 }}>有給</div>
+              <div style={{ fontSize: 11, color: "#e55", fontWeight: 700 }}>欠勤</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#999" }}><div style={{ width: 14, height: 14, borderRadius: "50%", background: "#F6BE00" }} />今日</div>
             </div>
           </div>
 
@@ -1181,22 +1181,19 @@ function SignedOutPanel({ status, signInGoogle, signUpEmail, signInEmail, resetP
   );
 }
 
-const STATE_STYLE = {
-  work:       { bg: "#111",    text: "#fff",  border: "none" },
-  paid_leave: { bg: "#4a90d9", text: "#fff",  border: "none" },
-  absent:     { bg: "#e55",    text: "#fff",  border: "none" },
-};
+const STATE_LABEL = { work: "出勤", paid_leave: "有給", absent: "欠勤" };
+const STATE_COLOR = { work: "#111", paid_leave: "#4a90d9", absent: "#e55" };
+const TODAY_COLOR = "#F6BE00";
 
 const CalDay = memo(({ day, isToday, state, dow, calYear, calMonth, onToggle }) => {
-  const s = STATE_STYLE[state];
-  const bg = s ? s.bg : "transparent";
-  const textColor = s ? s.text : isToday ? "#111" : dow===0 ? "#e55" : dow===6 ? "#55a" : "#333";
-  const border = isToday
-    ? "2.5px solid #999"
-    : "2px solid transparent";
+  const numColor = isToday ? "#111" : dow === 0 ? "#e55" : dow === 6 ? "#55a" : "#333";
   return (
-    <button onClick={() => onToggle(calYear, calMonth, day)} style={{ border, borderRadius: 9, padding: "7px 2px", cursor: "pointer", background: bg, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-      <span style={{ fontSize: 14, lineHeight: 1, fontWeight: (state || isToday) ? 700 : 400, color: textColor }}>{day}</span>
+    <button
+      onClick={() => onToggle(calYear, calMonth, day)}
+      style={{ border: "none", padding: "4px 0", cursor: "pointer", background: "transparent", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}
+    >
+      <span style={{ width: 26, height: 26, lineHeight: "26px", borderRadius: "50%", background: isToday ? TODAY_COLOR : "transparent", color: numColor, fontWeight: 700, textAlign: "center", fontSize: 14 }}>{day}</span>
+      <span style={{ fontSize: 9, fontWeight: 700, lineHeight: 1, minHeight: 9, color: state ? STATE_COLOR[state] : "transparent" }}>{state ? STATE_LABEL[state] : "・"}</span>
     </button>
   );
 });
