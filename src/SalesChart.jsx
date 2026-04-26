@@ -6,6 +6,17 @@ const CHART_HEIGHT = 200;
 const SALES_COLOR = "#3399ff";
 const TOLL_COLOR = "#e55";
 
+function formatMan(v) {
+  if (!v) return "";
+  if (v < 10000) {
+    const k = v / 1000;
+    return Number.isInteger(k) ? `${k}千` : `${k.toFixed(1)}千`;
+  }
+  const man = v / 10000;
+  if (man >= 100) return `${Math.round(man)}万`;
+  return Number.isInteger(man) ? `${man}万` : `${man.toFixed(1)}万`;
+}
+
 export default function SalesChart({ chartData, fmt, onPointClick, todayIndex }) {
   const containerRef = useRef(null);
 
@@ -66,7 +77,7 @@ export default function SalesChart({ chartData, fmt, onPointClick, todayIndex })
           dot={{ r: 5, fill: "#fff", stroke: SALES_COLOR, strokeWidth: 2 }}
           activeDot={{ r: 8, cursor: "pointer", fill: SALES_COLOR, stroke: "#fff", strokeWidth: 2 }}
         >
-          <LabelList dataKey="売上" position="top" fontSize={11} fill="#444" formatter={(v) => (v ? fmt(v) : "")} />
+          <LabelList dataKey="売上" position="top" offset={10} fontSize={12} fontWeight={700} fill={SALES_COLOR} formatter={formatMan} />
         </Line>
         <Line
           yAxisId="toll"
