@@ -6,17 +6,6 @@ const CHART_HEIGHT = 200;
 const SALES_COLOR = "#3399ff";
 const TOLL_COLOR = "#e55";
 
-function formatMan(v) {
-  if (!v) return "";
-  if (v < 10000) {
-    const k = v / 1000;
-    return Number.isInteger(k) ? `${k}千` : `${k.toFixed(1)}千`;
-  }
-  const man = v / 10000;
-  if (man >= 100) return `${Math.round(man)}万`;
-  return Number.isInteger(man) ? `${man}万` : `${man.toFixed(1)}万`;
-}
-
 export default function SalesChart({ chartData, fmt, onPointClick, todayIndex }) {
   const containerRef = useRef(null);
 
@@ -35,6 +24,26 @@ export default function SalesChart({ chartData, fmt, onPointClick, todayIndex })
 
   const chartWidth = Math.max(320, DAY_WIDTH * chartData.length + 40);
 
+  const renderSalesLabel = ({ x, y, value }) => {
+    if (!value) return null;
+    return (
+      <text
+        x={x}
+        y={y - 14}
+        textAnchor="middle"
+        fontSize={10}
+        fontWeight={600}
+        fill="#555"
+        stroke="#fff"
+        strokeWidth={3}
+        paintOrder="stroke"
+        style={{ pointerEvents: "none" }}
+      >
+        {fmt(value)}
+      </text>
+    );
+  };
+
   return (
     <>
     <div ref={containerRef} style={{ overflowX: "auto", overflowY: "hidden", WebkitOverflowScrolling: "touch" }}>
@@ -42,7 +51,7 @@ export default function SalesChart({ chartData, fmt, onPointClick, todayIndex })
         width={chartWidth}
         height={CHART_HEIGHT}
         data={chartData}
-        margin={{ top: 26, right: 20, left: 8, bottom: 4 }}
+        margin={{ top: 32, right: 24, left: 24, bottom: 4 }}
         onClick={handleClick}
       >
         <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
@@ -77,7 +86,7 @@ export default function SalesChart({ chartData, fmt, onPointClick, todayIndex })
           dot={{ r: 5, fill: "#fff", stroke: SALES_COLOR, strokeWidth: 2 }}
           activeDot={{ r: 8, cursor: "pointer", fill: SALES_COLOR, stroke: "#fff", strokeWidth: 2 }}
         >
-          <LabelList dataKey="売上" position="top" offset={10} fontSize={12} fontWeight={700} fill={SALES_COLOR} formatter={formatMan} />
+          <LabelList dataKey="売上" content={renderSalesLabel} />
         </Line>
         <Line
           yAxisId="toll"
