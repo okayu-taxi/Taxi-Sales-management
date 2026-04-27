@@ -904,13 +904,15 @@ function CommissionPanel({ commission, saveCommission }) {
   const topSaved = savedCount > 0 ? sortTiers(commission.tiers)[savedCount - 1] : null;
   if (!expanded) {
     return (
-      <button onClick={() => setExpanded(true)} style={{ width: "100%", textAlign: "left", background: "#f5f5f5", border: "none", borderRadius: 10, padding: "12px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
+      <>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <button onClick={() => setExpanded(true)} style={{ ...ghostBtn, padding: "6px 14px", fontSize: 12 }}>編集</button>
+        </div>
+        <div style={{ background: "#f5f5f5", borderRadius: 10, padding: "12px 14px" }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>{savedCount > 0 ? `${savedCount}段階を設定済` : "未設定"}</div>
           {topSaved && <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>最高 {topSaved.rate}% / 足切り ¥{(topSaved.threshold || 0).toLocaleString()}</div>}
         </div>
-        <span style={{ fontSize: 12, color: "#3399ff", fontWeight: 700 }}>編集 ▸</span>
-      </button>
+      </>
     );
   }
   return (
@@ -972,7 +974,6 @@ function FirebaseSyncPanel({ user, status, signInGoogle, signUpEmail, signInEmai
           </div>
         </div>
         <button onClick={signOut} style={{ ...ghostBtn, width: "100%", padding: "13px", color: "#e55", borderColor: "#f5c8c8" }}>サインアウト</button>
-        <div style={{ fontSize: 11, color: "#ccc", marginTop: 10, lineHeight: 1.7 }}>データ変更後 2 秒で自動的にクラウドへ保存されます。別端末で同じアカウントにサインインすると復元できます。</div>
       </>
     );
   }
