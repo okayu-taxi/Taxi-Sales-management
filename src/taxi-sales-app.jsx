@@ -7,24 +7,7 @@ const STORAGE_KEY = "taxi_sales_data_v3";
 
 const DEFAULT_COMMISSION = {
   tiers: [], // [{ threshold: number, rate: number(%)}]
-  attendanceTable: [], // [{ work, paid, absent, target }] — 一致した行があれば最高歩合の足切りを target に置き換え
 };
-
-function applyAttendanceAdjust(tiers, periodAtt, conf) {
-  const sorted = sortTiers(tiers);
-  if (sorted.length === 0) return sorted;
-  const table = conf?.attendanceTable || [];
-  const match = table.find(e =>
-    (Number(e.work) || 0) === (periodAtt?.work || 0) &&
-    (Number(e.paid) || 0) === (periodAtt?.paid || 0) &&
-    (Number(e.absent) || 0) === (periodAtt?.absent || 0)
-  );
-  if (!match || !(Number(match.target) > 0)) return sorted;
-  const out = [...sorted];
-  const last = out[out.length - 1];
-  out[out.length - 1] = { ...last, threshold: Number(match.target) };
-  return out;
-}
 
 function sortTiers(tiers) {
   return [...(tiers || [])].sort((a, b) => (a.threshold || 0) - (b.threshold || 0));
@@ -118,9 +101,7 @@ function migrateData(d) {
   d.settings = d.settings || {};
   // Initialize commission as empty (no auto-migration of legacy values)
   if (!d.settings.commission || !Array.isArray(d.settings.commission.tiers)) {
-    d.settings.commission = { tiers: [], attendanceTable: [] };
-  } else if (!Array.isArray(d.settings.commission.attendanceTable)) {
-    d.settings.commission.attendanceTable = [];
+    d.settings.commission = { tiers: [] };
   }
   if (d.attendance) {
     const mig = {};
@@ -193,7 +174,7 @@ export default function TaxiSalesApp() {
   }, [datesInPeriod, attendance]);
 
   const commission = useMemo(() => ({ ...DEFAULT_COMMISSION, ...(data.settings?.commission || {}) }), [data.settings?.commission]);
-  const sortedTiers = useMemo(() => applyAttendanceAdjust(commission.tiers, periodAtt, commission), [commission, periodAtt]);
+  const sortedTiers = useMemo(() => sortTiers(commission.tiers), [commission]);
   const topRateTier = useMemo(() => sortedTiers.length > 0 ? sortedTiers[sortedTiers.length - 1] : null, [sortedTiers]);
   const targetTop = topRateTier?.threshold || 0;
   const effectiveCommission = useMemo(() => ({ ...commission, tiers: sortedTiers }), [commission, sortedTiers]);
@@ -377,9 +358,6 @@ export default function TaxiSalesApp() {
 
   const saveCommission = useCallback((conf) => {
     setData(p => ({ ...p, settings: { ...p.settings, commission: { ...DEFAULT_COMMISSION, ...(p.settings?.commission || {}), ...conf } } }));
-  }, []);
-  const saveAttendanceTable = useCallback((table) => {
-    setData(p => ({ ...p, settings: { ...p.settings, commission: { ...DEFAULT_COMMISSION, ...(p.settings?.commission || {}), attendanceTable: table } } }));
   }, []);
 
   const toggleAtt = useCallback((y, m, d) => {
@@ -764,12 +742,6 @@ export default function TaxiSalesApp() {
             <div style={{ ...lbl, marginBottom: 12 }}>足切り設定</div>
             <CommissionPanel commission={commission} saveCommission={saveCommission} />
           </div>
-
-          {/* 最高歩合のための出勤日数設定 */}
-          <div style={card}>
-            <div style={{ ...lbl, marginBottom: 12 }}>足切り設定 (出勤日数別)</div>
-            <AttendanceTablePanel commission={commission} periodAtt={periodAtt} saveAttendanceTable={saveAttendanceTable} />
-          </div>
         </>}</div>
 
         <div style={{ ...tabPanelStyle, order: 2 }}>{visitedTabs.has("calendar") && <> {/* 出番表 */}
@@ -878,7 +850,7 @@ export default function TaxiSalesApp() {
                   <div style={{ fontSize: 12, color: "#e55", fontWeight: 700, marginBottom: 8, textAlign: "center" }}>本当に削除しますか？</div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => {
-                      setData(p => ({ ...p, settings: { closingDay: 0, commission: { tiers: [], attendanceTable: [] } } }));
+                      setData(p => ({ ...p, settings: { closingDay: 0, commission: { tiers: [] } } }));
                       setConfirmingReset(false);
                     }} style={{ background: "#e55", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", padding: "13px", flex: 1 }}>削除する</button>
                     <button onClick={() => setConfirmingReset(false)} style={{ ...ghostBtn, flex: 1, padding: "13px" }}>キャンセル</button>
@@ -927,81 +899,6 @@ export default function TaxiSalesApp() {
   );
 }
 
-function AttendanceTablePanel({ commission, periodAtt, saveAttendanceTable }) {
-  const baseTiers = sortTiers(commission?.tiers || []);
-  const baseTop = baseTiers.length > 0 ? baseTiers[baseTiers.length - 1] : null;
-  const stored = Array.isArray(commission?.attendanceTable) ? commission.attendanceTable : [];
-  const [rows, setRows] = useState(stored);
-  const [expanded, setExpanded] = useState(stored.length === 0);
-  useEffect(() => { setRows(Array.isArray(commission?.attendanceTable) ? commission.attendanceTable : []); }, [commission?.attendanceTable]);
-  const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
-  const updateRow = (i, patch) => setRows(prev => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r));
-  const removeRow = (i) => setRows(prev => prev.filter((_, idx) => idx !== i));
-  const addRow = () => setRows(prev => [...prev, { work: periodAtt?.work || 0, paid: periodAtt?.paid || 0, absent: periodAtt?.absent || 0, target: 0 }]);
-  const onSave = () => {
-    const cleaned = rows.map(r => ({
-      work: Math.max(0, Math.round(num(r.work))),
-      paid: Math.max(0, Math.round(num(r.paid))),
-      absent: Math.max(0, Math.round(num(r.absent))),
-      target: Math.max(0, Math.round(num(r.target))),
-    }));
-    saveAttendanceTable(cleaned);
-  };
-  const dirty = JSON.stringify(rows) !== JSON.stringify(stored);
-  if (!baseTop) {
-    return <div style={{ fontSize: 12, color: "#ccc" }}>給料タブで歩合率を設定すると有効になります</div>;
-  }
-  const matched = rows.find(r => Number(r.work) === (periodAtt?.work || 0) && Number(r.paid) === (periodAtt?.paid || 0) && Number(r.absent) === (periodAtt?.absent || 0));
-  if (!expanded) {
-    return (
-      <button onClick={() => setExpanded(true)} style={{ width: "100%", textAlign: "left", background: "#f5f5f5", border: "none", borderRadius: 10, padding: "12px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>{stored.length > 0 ? `${stored.length}件を設定済` : "未設定"}</div>
-          <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{stored.length === 0 ? "未使用 ・ 足切り設定のみで計算中" : matched ? `今月は ¥${Number(matched.target).toLocaleString()} を適用中` : "今月の出勤に一致する行なし ・ 足切り設定の値を使用"}</div>
-        </div>
-        <span style={{ fontSize: 12, color: "#3399ff", fontWeight: 700 }}>編集 ▸</span>
-      </button>
-    );
-  }
-  return (
-    <>
-      <div style={{ fontSize: 11, color: "#999", marginBottom: 10, lineHeight: 1.7, padding: "8px 10px", background: "#FFF8E0", border: "1px solid #F6BE00", borderRadius: 8 }}>
-        ⚠ <b>任意設定です。</b> 出勤日数によって最高歩合（{baseTop.rate}%）の足切りが変わる会社のみ使ってください。<br />
-        何も登録しなければ <b>「足切り設定」の値だけ</b> で計算されます。より細かく管理したい場合のみ、出勤数・有休数・欠勤数別の足切りを下に追加してください。
-      </div>
-      {rows.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1.6fr 28px", gap: 4, fontSize: 10, color: "#999", padding: "0 4px", marginBottom: 4 }}>
-          <div>出勤</div><div>有休</div><div>欠勤</div><div style={{ textAlign: "right" }}>足切り（円）</div><div></div>
-        </div>
-      )}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
-        {rows.map((r, i) => (
-          <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1.6fr 28px", gap: 4, alignItems: "center" }}>
-            <input type="number" value={r.work} onChange={e => updateRow(i, { work: e.target.value })} style={{ ...inputStyle, padding: "8px 4px", boxSizing: "border-box", textAlign: "right", minWidth: 0, width: "100%" }} />
-            <input type="number" value={r.paid} onChange={e => updateRow(i, { paid: e.target.value })} style={{ ...inputStyle, padding: "8px 4px", boxSizing: "border-box", textAlign: "right", minWidth: 0, width: "100%" }} />
-            <input type="number" value={r.absent} onChange={e => updateRow(i, { absent: e.target.value })} style={{ ...inputStyle, padding: "8px 4px", boxSizing: "border-box", textAlign: "right", minWidth: 0, width: "100%" }} />
-            <input type="number" value={r.target} onChange={e => updateRow(i, { target: e.target.value })} style={{ ...inputStyle, padding: "8px 6px", boxSizing: "border-box", textAlign: "right", minWidth: 0, width: "100%" }} />
-            <button onClick={() => removeRow(i)} style={{ background: "transparent", border: "none", color: "#e55", fontSize: 18, cursor: "pointer", padding: 0 }}>✕</button>
-          </div>
-        ))}
-      </div>
-      <button onClick={addRow} style={{ ...ghostBtn, width: "100%", padding: "10px", marginBottom: 10 }}>+ 行を追加</button>
-      <div style={{ padding: "10px 12px", background: matched ? "#FFF8E0" : "#f5f5f5", borderRadius: 8, marginBottom: 10, border: matched ? "1px solid #F6BE00" : "none" }}>
-        <div style={{ fontSize: 10, color: "#999", marginBottom: 4 }}>今月（出勤{periodAtt?.work || 0}日 / 有休{periodAtt?.paid || 0}日 / 欠勤{periodAtt?.absent || 0}日）</div>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>
-          {matched ? `¥${Number(matched.target).toLocaleString()}（一致行を適用）` : `¥${(baseTop.threshold || 0).toLocaleString()}（一致行なし → 基準値）`}
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-        <button onClick={() => { onSave(); setExpanded(false); }} disabled={!dirty} style={{ ...primaryBtn, flex: 1, padding: "13px", opacity: dirty ? 1 : 0.4 }}>保存</button>
-        <button onClick={() => { setRows(stored); setExpanded(false); }} style={{ ...ghostBtn, flex: 1, padding: "13px" }}>閉じる</button>
-      </div>
-      {(stored.length > 0 || rows.length > 0) && (
-        <button onClick={() => { if (window.confirm("全ての行を消去します。よろしいですか？")) { setRows([]); saveAttendanceTable([]); } }} style={{ ...ghostBtn, width: "100%", padding: "10px", color: "#e55", borderColor: "#f5c8c8", fontSize: 12 }}>全て消去</button>
-      )}
-    </>
-  );
-}
 
 function CommissionPanel({ commission, saveCommission }) {
   const initial = commission?.tiers?.length ? commission.tiers : [];
