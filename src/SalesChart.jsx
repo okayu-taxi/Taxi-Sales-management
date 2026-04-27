@@ -67,14 +67,12 @@ export default function SalesChart({ chartData, fmt, onPointClick, todayIndex })
             );
           }}
         />
-        <YAxis yAxisId="sales" hide domain={[0, "dataMax + 5000"]} />
-        <YAxis yAxisId="toll" orientation="right" hide domain={[0, "dataMax + 500"]} />
+        <YAxis hide domain={[0, "dataMax + 5000"]} />
         <Tooltip
           contentStyle={{ background: "#fff", border: "1px solid #ebebeb", borderRadius: 8, fontSize: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}
           formatter={(v, n) => [`¥${fmt(v)}`, n]}
         />
         <Line
-          yAxisId="sales"
           type="monotone"
           dataKey="売上"
           stroke={SALES_COLOR}
@@ -86,7 +84,6 @@ export default function SalesChart({ chartData, fmt, onPointClick, todayIndex })
           <LabelList dataKey="売上" content={renderSalesLabel} />
         </Line>
         <Line
-          yAxisId="toll"
           type="monotone"
           dataKey="自腹高速"
           stroke={TOLL_COLOR}
