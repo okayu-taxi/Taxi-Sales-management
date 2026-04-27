@@ -745,11 +745,6 @@ export default function TaxiSalesApp() {
 
         <div style={{ ...tabPanelStyle, order: 2 }}>{visitedTabs.has("calendar") && <> {/* 出番表 */}
           <div style={{ ...card, padding: "12px 16px", marginBottom: 12 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "#aaa", lineHeight: 1.8 }}>
-              日付をタップして<span style={{ color: "#111", fontWeight: 700 }}>出番</span>・<span style={{ color: "#c8900a", fontWeight: 700 }}>公出</span>・<span style={{ color: "#3399ff", fontWeight: 700 }}>有給</span>・<span style={{ color: "#e55", fontWeight: 700 }}>休み</span>を選択
-            </p>
-          </div>
-          <div style={{ ...card, padding: "12px 16px", marginBottom: 12 }}>
             <div style={{ fontSize: 11, color: "#bbb", marginBottom: 8, fontWeight: 700, letterSpacing: 1 }}>今月の出番日数</div>
             <div style={{ display: "flex", gap: 12 }}>
               <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#111" }}>{periodAtt.work}</div><div style={{ fontSize: 10, color: "#999" }}>出番</div></div>
@@ -804,6 +799,11 @@ export default function TaxiSalesApp() {
                 ))}
               </div>
             </div>
+          </div>
+          <div style={{ ...card, padding: "12px 16px", marginBottom: 12 }}>
+            <p style={{ margin: 0, fontSize: 12, color: "#aaa", lineHeight: 1.8 }}>
+              日付をタップして<span style={{ color: "#111", fontWeight: 700 }}>出番</span>・<span style={{ color: "#c8900a", fontWeight: 700 }}>公出</span>・<span style={{ color: "#3399ff", fontWeight: 700 }}>有給</span>・<span style={{ color: "#e55", fontWeight: 700 }}>休み</span>を選択
+            </p>
           </div>
         </>}</div>
 
