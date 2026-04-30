@@ -594,17 +594,6 @@ export default function TaxiSalesApp() {
   }, [calYear, calMonth, attendance]);
   const { cells: calCells, first: calFirst } = calMonths[1];
 
-  const calMaxToll = useMemo(() => {
-    let max = 0;
-    for (const mo of calMonths) {
-      for (let d = 1; d <= mo.days; d++) {
-        const t = getTollForDate(mo.y, mo.m, d);
-        if (t > max) max = t;
-      }
-    }
-    return max;
-  }, [calMonths, getTollForDate]);
-
   return (
     <div style={{ height: "100vh", background: "#f7f7f7", color: "#111", fontFamily: "'Noto Sans JP', -apple-system, sans-serif", maxWidth: 480, margin: "0 auto", display: "flex", flexDirection: "column" }}>
 
@@ -859,14 +848,13 @@ export default function TaxiSalesApp() {
             <div ref={calContainerRef} style={{ overflow: "hidden", position: "relative" }}>
               <div ref={calTrackRef} style={{ display: "flex", transform: "translate3d(-100%, 0, 0)", transition: "transform 0.25s ease-out", willChange: "transform" }}>
                 {calMonths.map((mo) => (
-                  <div key={`${mo.y}-${mo.m}`} style={{ flex: "0 0 100%", display: "grid", gridTemplateColumns: "repeat(7,1fr)", gridAutoRows: "48px", gap: 3 }}>
+                  <div key={`${mo.y}-${mo.m}`} style={{ flex: "0 0 100%", display: "grid", gridTemplateColumns: "repeat(7,1fr)", gridAutoRows: "44px", gap: 3 }}>
                     {mo.cells.map((day, idx) => {
                       if (!day) return <div key={`e-${idx}`} />;
                       const isToday = mo.y===today.year && mo.m===today.month && day===today.day;
                       const state = getAttState(mo.y, mo.m, day);
                       const dow = (mo.first + day - 1) % 7;
-                      const toll = getTollForDate(mo.y, mo.m, day);
-                      return <CalDay key={day} day={day} isToday={isToday} state={state} toll={toll} maxToll={calMaxToll} dow={dow} calYear={mo.y} calMonth={mo.m} onToggle={toggleAtt} />;
+                      return <CalDay key={day} day={day} isToday={isToday} state={state} dow={dow} calYear={mo.y} calMonth={mo.m} onToggle={toggleAtt} />;
                     })}
                   </div>
                 ))}
@@ -1165,19 +1153,15 @@ const STATE_LABEL = { work: "出番", paid_leave: "有給", absent: "公出", da
 const STATE_COLOR = { work: "#111", paid_leave: "#3399ff", absent: "#c8900a", day_off: "#e55" };
 const TODAY_COLOR = "#111";
 
-const CalDay = memo(({ day, isToday, state, toll = 0, maxToll = 0, dow, calYear, calMonth, onToggle }) => {
+const CalDay = memo(({ day, isToday, state, dow, calYear, calMonth, onToggle }) => {
   const numColor = isToday ? "#fff" : dow === 0 ? "#e55" : dow === 6 ? "#55a" : "#333";
-  const tollPct = toll > 0 && maxToll > 0 ? Math.min(1, toll / maxToll) : 0;
   return (
     <button
       onClick={() => onToggle(calYear, calMonth, day)}
-      style={{ border: "none", padding: "3px 0", cursor: "pointer", background: "transparent", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}
+      style={{ border: "none", padding: "4px 0", cursor: "pointer", background: "transparent", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}
     >
       <span style={{ width: 26, height: 26, lineHeight: "26px", borderRadius: "50%", background: isToday ? TODAY_COLOR : "transparent", color: numColor, fontWeight: 700, textAlign: "center", fontSize: 14 }}>{day}</span>
       <span style={{ fontSize: 9, fontWeight: 700, lineHeight: 1, minHeight: 9, color: state ? STATE_COLOR[state] : "transparent" }}>{state ? STATE_LABEL[state] : "・"}</span>
-      <span style={{ display: "block", width: "70%", height: 3, background: "#f0f0f0", borderRadius: 2, overflow: "hidden", visibility: tollPct > 0 ? "visible" : "hidden" }}>
-        <span style={{ display: "block", height: "100%", width: `${tollPct * 100}%`, background: "#e55" }} />
-      </span>
     </button>
   );
 });
