@@ -1,9 +1,11 @@
 import { useRef, useEffect } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, LabelList } from "recharts";
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LabelList } from "recharts";
 
 const DAY_WIDTH = 52;
 const CHART_HEIGHT = 200;
+const TOLL_HEIGHT = 50;
 const SALES_COLOR = "#3399ff";
+const TOLL_COLOR = "#e55";
 
 export default function SalesChart({ chartData, fmt, onPointClick, todayIndex }) {
   const containerRef = useRef(null);
@@ -22,6 +24,7 @@ export default function SalesChart({ chartData, fmt, onPointClick, todayIndex })
   };
 
   const chartWidth = Math.max(320, DAY_WIDTH * chartData.length + 40);
+  const hasToll = chartData.some(d => (d?.自腹高速 || 0) > 0);
 
   const renderSalesLabel = ({ x, y, value }) => {
     if (!value) return null;
@@ -33,6 +36,23 @@ export default function SalesChart({ chartData, fmt, onPointClick, todayIndex })
         fontSize={10}
         fontWeight={600}
         fill="#555"
+        style={{ pointerEvents: "none" }}
+      >
+        {fmt(value)}
+      </text>
+    );
+  };
+
+  const renderTollLabel = ({ x, y, value }) => {
+    if (!value) return null;
+    return (
+      <text
+        x={x}
+        y={y - 4}
+        textAnchor="middle"
+        fontSize={9}
+        fontWeight={600}
+        fill={TOLL_COLOR}
         style={{ pointerEvents: "none" }}
       >
         {fmt(value)}
@@ -82,6 +102,21 @@ export default function SalesChart({ chartData, fmt, onPointClick, todayIndex })
           <LabelList dataKey="売上" content={renderSalesLabel} />
         </Line>
       </LineChart>
+      {hasToll && (
+        <BarChart
+          width={chartWidth}
+          height={TOLL_HEIGHT}
+          data={chartData}
+          margin={{ top: 14, right: 24, left: 24, bottom: 0 }}
+          barCategoryGap="20%"
+        >
+          <XAxis dataKey="label" hide />
+          <YAxis hide domain={[0, "dataMax + 100"]} />
+          <Bar dataKey="自腹高速" fill={TOLL_COLOR} radius={[2, 2, 0, 0]}>
+            <LabelList dataKey="自腹高速" content={renderTollLabel} />
+          </Bar>
+        </BarChart>
+      )}
     </div>
   );
 }
